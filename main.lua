@@ -25,6 +25,13 @@ local block_types = {
     PFB_ModularTubeSystem_Skewe = "decoration",
     PFB_ModularTubeSystem_TubeE = "decoration",
     PFB_ModularTubeSystem_Tube3 = "decoration",
+    PFB_LightFront = "decoration",
+    PFB_LightFront_V2 = "decoration",
+    PFB_PopupHeadlightBlock = "decoration",
+    PFB_MilitaryHeadlights = "decoration",
+    PFB_CityHeadlights = "decoration",
+    PFB_BajaLEDs = "decoration",
+    PFB_CameraBlock = "decoration",
 
     -- no drag for the seats
     PFB_GokartSeat = "seat",
