@@ -1,14 +1,15 @@
 tm.os.Log("KartMakers by HormaV5 (Project lead), RainlessSky (Programmer), Antimatterdev (Fake programmer)")
+tm.os.Log("")
 
 -- Enable performance logging
-local profiling = false
+local profiling = true
 
 local profiling_structure_checking_time = 0
 local profiling_ui_time = 0
 local profiling_mod_start_time = 0
 
--- Multiplier for cc. Default is 150. Edit with multiples of 50
-local engine_cc = 150
+-- Config
+local motorcycle_buff = 400 -- How much of a power increase should motorcycles get?
 
 player_data = {}
 function OnPlayerJoined(player)
@@ -18,7 +19,13 @@ function OnPlayerJoined(player)
         block_count = 0,
         has_banned_blocks = false,
         banned_blocks = {},
-        total_engines = 0
+        total_engines = 0,
+        wheels = {
+            {type="3x3x1",amount=0},
+            {type="3x3x2",amount=0}
+        },
+        selected_engine_cc = 0,
+        engines = {}
     }
 end
 tm.players.OnPlayerJoined.add(OnPlayerJoined)
@@ -177,36 +184,62 @@ function CheckStructures(playerId)
     if tm.players.GetPlayerIsInBuildMode(playerId) then
         local live_block_count = 0
         local structures = tm.players.GetPlayerStructuresInBuild(playerId)
-        for _, structure in ipairs(structures) do
+        for _,structure in ipairs(structures) do
             live_block_count = live_block_count + #structure.GetBlocks()
+        end
+        for i,_ in ipairs(player_data[playerId].engines) do
+            local block = player_data[playerId].engines[i].block
+            local power = 0
+            for j,_ in pairs(engine_cc_list) do
+                if block.GetSecondaryColor().ToString()==engine_cc_list[j].color then
+                    power = engine_cc_list[j].cc*22.22
+                    player_data[playerId].selected_engine_cc = engine_cc_list[j].cc
+                    if player_data[playerId].wheels[1].amount==2 or player_data[playerId].wheels[2].amount==2 then
+                        power = power + motorcycle_buff
+                    end
+                    break
+                end
+            end
+            if block.GetEnginePower() ~= power then
+                if profiling==true then
+                    tm.os.Log(tm.players.GetPlayerName(playerId).. " (".. playerId.. ")'s engine power is out of sync, updating...")
+                end
+                tm.audio.PlayAudioAtPosition("Build_attach_Weapon", tm.players.GetPlayerTransform(playerId).GetPosition(), 1)
+                block.SetEnginePower(power)
+            end
         end
         if live_block_count ~= player_data[playerId].block_count then
             if profiling==true then
                 tm.os.Log("Build was updated for ".. tm.players.GetPlayerName(playerId).. " (".. playerId.. "), updating data...")
             end
+            tm.audio.PlayAudioAtPosition("Build_attach_Flag", tm.players.GetPlayerTransform(playerId).GetPosition(), 1)
             player_data[playerId].total_buoyancy = 0
             player_data[playerId].total_weight = 0
             player_data[playerId].has_banned_blocks = false
             player_data[playerId].banned_blocks = {}
             player_data[playerId].total_engines = 0
+            player_data[playerId].wheels = {
+                {type="3x3x1",amount=0},
+                {type="3x3x2",amount=0}
+            }
+            player_data[playerId].engines = {}
             for _,structure in ipairs(structures) do
                 local blocks = structure.GetBlocks()
+                local banned_blocks = {}
                 for index,block in pairs(blocks) do
                     local value = block_types[string.sub(block.GetName(), 5, -10)]
 
-                    if value == "banned" then
-                        for _,block in ipairs(blocks) do
-                            local value = block_types[string.sub(block.GetName(), 5, -10)]
-                            if value == "engine" then
-                                block.SetEnginePower(0)
-                            end
-                        end
-                        player_data[playerId].has_banned_blocks = true
-                        table.insert(player_data[playerId].banned_blocks, string.sub(block.GetName(), 5, -10))
-                    end
+                    -- multiply mass by 5 to convert to kg
+                    player_data[playerId].total_buoyancy = player_data[playerId].total_buoyancy + block.GetBuoyancy()*5
+                    player_data[playerId].total_weight = player_data[playerId].total_weight + block.GetMass()*5
 
-                    if value == "3x3x1" or value == "3x3x2" then -- set buoyancy for common wheels
+                    if value == "3x3x1" then
                         block.SetBuoyancy(9) -- multiply buoyancy by 5 to convert to kg
+                        player_data[playerId].wheels[1].amount = player_data[playerId].wheels[1].amount + 1 -- Count wheels for bike buff eligibility check
+                    end
+                    if value == "3x3x2" then
+                        block.SetBuoyancy(9)
+                        player_data[playerId].wheels[2].amount = player_data[playerId].wheels[2].amount + 1 -- Count wheels for bike buff eligibility check
                     end
                     if value == "4x1x1" then -- skis and pistons
                         block.SetBuoyancy(32)
@@ -218,36 +251,53 @@ function CheckStructures(playerId)
                     if value == "decoration" then -- pipes, lights, steering hinge, camera block
                         block.SetDragAll(0.1, 0.1, 0.1, 0.1, 0.1, 0.1) -- 0 drag for now, in the future make it the same as 2x1x1 wedge
                     end
-                    -- Log the current engine's secondary color. Un comment this when adding new cc colors
-                    --if value == "engine" then tm.os.Log(block.GetSecondaryColor().ToString()) end
-                    if value == "engine" and #player_data[playerId].banned_blocks==0 then
-                        block.SetEnginePower(0) -- Set to zero so if it's an invalid color it remains as zero
-                        --tm.os.Log("Engine power is now 0")
+
+                    if value == "engine" then
+                        player_data[playerId].total_engines = player_data[playerId].total_engines + 1
+                        player_data[playerId].engines[#player_data[playerId].engines+1] = {block=nil}
+                        player_data[playerId].engines[#player_data[playerId].engines].block = block
+                    end
+
+                    if value == "banned" then
+                        player_data[playerId].has_banned_blocks = true
+                        table.insert(player_data[playerId].banned_blocks, string.sub(block.GetName(), 5, -10))
+                    end
+                end
+                -- Log the current engine's secondary color. Un comment this when adding new cc colors
+                --if value == "engine" then tm.os.Log(block.GetSecondaryColor().ToString()) end
+                for i,_ in ipairs(player_data[playerId].engines) do
+                    local block = player_data[playerId].engines[i].block
+                    block.SetEnginePower(0) -- Set to zero so if there's an invalid kart setup it remains as zero
+                    if #player_data[playerId].banned_blocks==0 then
                         if player_data[playerId].total_engines==0 then
                             for i,_ in pairs(engine_cc_list) do
                                 if block.GetSecondaryColor().ToString()==engine_cc_list[i].color then
                                     block.SetEnginePower(engine_cc_list[i].cc*22.22)
-                                    --tm.os.Log("Engine power is now ".. block.GetEnginePower())
-                                    player_data[playerId].total_engines = player_data[playerId].total_engines + 1
+                                    player_data[playerId].selected_engine_cc = engine_cc_list[i].cc
+                                    if player_data[playerId].wheels[1].amount==2 or player_data[playerId].wheels[2].amount==2 then
+                                        block.SetEnginePower(block.GetEnginePower()+motorcycle_buff)
+                                    end
                                 end
                             end
                         else
-                            player_data[playerId].total_engines = player_data[playerId].total_engines + 1
                             for _,block in ipairs(blocks) do
                                 local value = block_types[string.sub(block.GetName(), 5, -10)]
                                 if value == "engine" then
                                     block.SetEnginePower(0)
-                                    --tm.os.Log("Engine power is now ".. block.GetEnginePower())
                                 end
                             end
                         end
                     end
-
-                    -- multiply mass by 5 to convert to kg
-                    player_data[playerId].total_buoyancy = player_data[playerId].total_buoyancy + block.GetBuoyancy()*5
-                    player_data[playerId].total_weight = player_data[playerId].total_weight + block.GetMass()*5
                 end
-            player_data[playerId].block_count = #blocks
+                for _,_ in pairs(player_data[playerId].banned_blocks) do
+                    for _,block in ipairs(blocks) do
+                        local value = block_types[string.sub(block.GetName(), 5, -10)]
+                        if value == "engine" then
+                            block.SetEnginePower(0)
+                        end
+                    end
+                end
+            player_data[playerId].block_count = live_block_count
             end
         end
         if profiling==true then
@@ -269,32 +319,24 @@ function UpdateUI(playerId)
             tm.playerUI.AddUILabel(playerId, "selectedblock-name", "".. string.sub(tm.players.GetPlayerSelectBlockInBuild(playerId).GetName(), 5, -10).. "")
 
             -- Get hex code of the selected block's primary color
-            local color = tm.players.GetPlayerSelectBlockInBuild(playerId).GetPrimaryColor()
-            local prhex = string.format("%x", color.R() * 255) -- ai told me how to do this
-            local pghex = string.format("%x", color.G() * 255)
-            local pbhex = string.format("%x", color.B() * 255)
-            if prhex=="0" then prhex = "00" end -- fix missing zero so color preview works
-            if pghex=="0" then pghex = "00" end
-            if pbhex=="0" then pbhex = "00" end
+            --local color = tm.players.GetPlayerSelectBlockInBuild(playerId).GetPrimaryColor()
+            --local rgb = (color.R()*255 * 0x10000) + (color.G()*255 * 0x100) + color.B()*255
+            --local phex = string.format("%06x", rgb)
 
             -- Get hex code of the selected block's secondary color
             local color = tm.players.GetPlayerSelectBlockInBuild(playerId).GetSecondaryColor()
-            local srhex = string.format("%x", color.R() * 255) -- ai told me how to do this
-            local sghex = string.format("%x", color.G() * 255)
-            local sbhex = string.format("%x", color.B() * 255)
-            if srhex=="0" then srhex = "00" end -- fix missing zero so color preview works
-            if sghex=="0" then sghex = "00" end
-            if sbhex=="0" then sbhex = "00" end
+            local rgb = (color.R()*255 * 0x10000) + (color.G()*255 * 0x100) + color.B()*255
+            local shex = string.format("%06x", rgb)
 
             -- Primary color display is disabled due to prevent UI flickering.
-            --tm.playerUI.AddUILabel(playerId, "selectedblock-pcolor", "Primary color: <color=#".. prhex.. pghex.. pbhex.. ">██</color> #".. prhex.. pghex.. pbhex)
-            tm.playerUI.AddUILabel(playerId, "selectedblock-scolor", "Secondary color: <color=#".. srhex.. sghex.. sbhex.. ">██</color> #".. srhex.. sghex.. sbhex)
-            tm.playerUI.AddUILabel(playerId, "selectedblock-mass", "Weight: ".. math.floor(tm.players.GetPlayerSelectBlockInBuild(playerId).GetMass()*500)/100 .. "kg")
-            tm.playerUI.AddUILabel(playerId, "selectedblock-buoyancy", "Buoyancy: ".. math.floor(tm.players.GetPlayerSelectBlockInBuild(playerId).GetBuoyancy()*500)/100 .. "kg")
+            --tm.playerUI.AddUILabel(playerId, "selectedblock-pcolor", "Primary color: <color=#".. phex.. ">██</color> #".. phex)
+            tm.playerUI.AddUILabel(playerId, "selectedblock-scolor", "Secondary color: <color=#".. shex.. ">██</color> #".. shex)
+            tm.playerUI.AddUILabel(playerId, "selectedblock-mass", "Weight: ".. string.format("%0.1f", tm.players.GetPlayerSelectBlockInBuild(playerId).GetMass()*5) .. "kg")
+            tm.playerUI.AddUILabel(playerId, "selectedblock-buoyancy", "Buoyancy: ".. string.format("%0.1f", tm.players.GetPlayerSelectBlockInBuild(playerId).GetBuoyancy()*5) .. "kg")
 
             if tm.players.GetPlayerSelectBlockInBuild(playerId).IsEngineBlock() then
                 if tm.players.GetPlayerSelectBlockInBuild(playerId).GetEnginePower() ~= 0 then
-                    tm.playerUI.AddUILabel(playerId, "selectedblock-enginepower", tm.players.GetPlayerSelectBlockInBuild(playerId).GetEnginePower()/22.22 .. "cc | ".. tm.players.GetPlayerSelectBlockInBuild(playerId).GetEnginePower().. " power")
+                    tm.playerUI.AddUILabel(playerId, "selectedblock-enginepower", player_data[playerId].selected_engine_cc .. "cc | ".. tm.players.GetPlayerSelectBlockInBuild(playerId).GetEnginePower().. " power")
                 else
                     tm.playerUI.AddUILabel(playerId, "selectedblock-enginepower", "<color=#FAA>Invalid secondary color!</color>") 
                 end
@@ -308,6 +350,7 @@ function UpdateUI(playerId)
             for i,_ in ipairs(player_data[playerId].banned_blocks) do
                 tm.playerUI.AddUILabel(playerId, "banned-blocks-"..i, "<i>".. player_data[playerId].banned_blocks[i].. "</i>")
             end
+            tm.audio.PlayAudioAtPosition("Block_Flamethrower_OutOfAmmo_Oneshot", tm.players.GetPlayerTransform(playerId).GetPosition(), 1)
         end
         if profiling==true then
             local endtime = tm.os.GetRealtimeSinceStartup()
