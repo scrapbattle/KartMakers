@@ -2,7 +2,7 @@ tm.os.Log("KartMakers by HormaV5 (Project lead), RainlessSky (Programmer), Antim
 tm.os.Log("")
 
 -- Enable performance logging
-local profiling = true
+local profiling = false
 
 local profiling_structure_checking_time = 0
 local profiling_ui_time = 0
@@ -174,9 +174,7 @@ function update()
         end
     end
 
-    if profiling==true then
-        PrintProfilingData(tm.os.GetRealtimeSinceStartup())
-    end
+    if profiling==true then PrintProfilingData(tm.os.GetRealtimeSinceStartup()) end
 end
 
 function CheckStructures(playerId)
