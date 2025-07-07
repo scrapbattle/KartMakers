@@ -1,8 +1,8 @@
 tm.os.Log("KartMakers by HormaV5 (Project lead), RainlessSky (Programmer), Antimatterdev (Fake programmer)")
 tm.os.Log("")
 
--- Enable performance logging
-local profiling = false
+-- Enable performance logging. 0 = off, 1 = all, 2 = limited
+local profiling = 2
 
 local profiling_structure_checking_time = 0
 local profiling_ui_time = 0
@@ -157,7 +157,7 @@ local engine_cc_list = { -- this holds the RGB color for paints, and then what e
 }
 
 function update()
-    if profiling==true then profiling_mod_start_time = tm.os.GetRealtimeSinceStartup() profiling_structure_checking_time = 0 profiling_ui_time = 0 end
+    if profiling==1 then profiling_mod_start_time = tm.os.GetRealtimeSinceStartup() profiling_structure_checking_time = 0 profiling_ui_time = 0 end
 
     local players = tm.players.CurrentPlayers()
     for _, player in ipairs(players) do
@@ -170,7 +170,7 @@ function update()
         ApplyLocalGravity(playerId)
     end
 
-    if profiling==true then PrintProfilingData(tm.os.GetRealtimeSinceStartup()) end
+    if profiling==1 then PrintProfilingData(tm.os.GetRealtimeSinceStartup()) end
     tm.os.SetModTargetDeltaTime(1/60)
 end
 
@@ -218,6 +218,7 @@ function CheckStructures(playerId)
             live_block_count = live_block_count + #structure.GetBlocks()
         end
         for i,_ in ipairs(player_data[playerId].engines) do
+            if player_data[playerId].engines[i].block.Exists() then
             local block = player_data[playerId].engines[i].block
             local power = 0
             for j,_ in pairs(engine_cc_list) do
@@ -231,18 +232,22 @@ function CheckStructures(playerId)
                 end
             end
             if block.GetEnginePower() ~= power then
-                if profiling==true then
+                if profiling==2 then
                     tm.os.Log(tm.players.GetPlayerName(playerId).. " (".. playerId.. ")'s engine power is out of sync, updating...")
                 end
-                tm.audio.PlayAudioAtPosition("Build_attach_Weapon", tm.players.GetPlayerTransform(playerId).GetPosition(), 1)
+                tm.audio.PlayAudioAtGameobject("Build_attach_Weapon", tm.players.GetPlayerGameObject(playerId))
                 block.SetEnginePower(power)
+            end
             end
         end
         if live_block_count ~= player_data[playerId].block_count then
-            if profiling==true then
+            if profiling==2 then
                 tm.os.Log("Build was updated for ".. tm.players.GetPlayerName(playerId).. " (".. playerId.. "), updating data...")
+                tm.os.Log("Build has ".. live_block_count.. " blocks right now")
+                tm.os.Log("Build had ".. player_data[playerId].block_count.. " blocks")
             end
-            tm.audio.PlayAudioAtPosition("Build_attach_Flag", tm.players.GetPlayerTransform(playerId).GetPosition(), 1)
+            player_data[playerId].block_count = live_block_count
+            tm.audio.PlayAudioAtGameobject("Build_attach_Flag", tm.players.GetPlayerGameObject(playerId))
             player_data[playerId].total_buoyancy = 0
             player_data[playerId].total_weight = 0
             player_data[playerId].has_banned_blocks = false
@@ -327,10 +332,9 @@ function CheckStructures(playerId)
                         end
                     end
                 end
-            player_data[playerId].block_count = live_block_count
             end
         end
-        if profiling==true then
+        if profiling==1 then
             profiling_structure_checking_time = profiling_structure_checking_time + tm.os.GetRealtimeSinceStartup()-profiling_structure_checking_start_time
         end
     end
@@ -380,9 +384,9 @@ function UpdateUI(playerId)
             for i,_ in ipairs(player_data[playerId].banned_blocks) do
                 tm.playerUI.AddUILabel(playerId, "banned-blocks-"..i, "<i>".. player_data[playerId].banned_blocks[i].. "</i>")
             end
-            tm.audio.PlayAudioAtPosition("Block_Flamethrower_OutOfAmmo_Oneshot", tm.players.GetPlayerTransform(playerId).GetPosition(), 1)
+            tm.audio.PlayAudioAtGameobject("Block_BombRack_Reload", tm.players.GetPlayerGameObject(playerId))
         end
-        if profiling==true then
+        if profiling==1 then
             local endtime = tm.os.GetRealtimeSinceStartup()
             profiling_ui_time = profiling_ui_time + endtime-profiling_ui_start_time
         end
