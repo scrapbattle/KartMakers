@@ -167,14 +167,46 @@ function update()
         UpdateUI(playerId)
 
         -- Proof-of-concept for per-player no-gravity toggle (it doesnt work perfectly)
-        if tm.players.IsPlayerInSeat(playerId) then
-            if player_data[playerId].totalweight ~= nil then
-                --tm.players.GetPlayerSeatBlock(playerId).GetStructure().AddForce(0, player_data[playerId].totalweight * 14, 0)
-            end
-        end
+        ApplyLocalGravity(playerId)
     end
 
     if profiling==true then PrintProfilingData(tm.os.GetRealtimeSinceStartup()) end
+    tm.os.SetModTargetDeltaTime(1/60)
+end
+
+function ApplyLocalGravity(playerId)
+    -- Check if player is in a seat
+    if not tm.players.IsPlayerInSeat(playerId) then return end
+
+    local seatBlock = tm.players.GetPlayerSeatBlock(playerId)
+    if not seatBlock or not seatBlock.Exists() then return end
+
+    local structure = seatBlock.GetStructure()
+    if not structure then return end
+
+    local weight = player_data[playerId] and player_data[playerId].total_weight
+    if not weight then return end
+
+    local localDown = tm.vector3.Create(0, -1, 0)
+    local worldDown = seatBlock.TransformDirection(localDown) -- rotated downward vector should be rotated local to player
+
+    local origin = seatBlock.GetPosition()
+    local rayLength = 5
+    local rayEnd = origin + (worldDown * rayLength)
+
+    local hit = tm.physics.RaycastData(origin, worldDown, rayLength, false)
+
+    if hit and hit.DidHit() then
+        local hitNormal = hit.GetHitNormal()
+
+        --tm.os.Log("Ground normal: " .. tostring(hitNormal))
+        -- 0.33
+        local gravityStrength = weight * 0.055
+        structure.AddForce(worldDown.x * gravityStrength, worldDown.y * gravityStrength, worldDown.z * gravityStrength)
+    else
+        local gravityStrength = weight * 0.055
+        structure.AddForce(0, -gravityStrength, 0)
+    end
 end
 
 function CheckStructures(playerId)
