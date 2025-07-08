@@ -6,7 +6,7 @@ tm.physics.AddTexture("KartOutline.png", "icon")
 tm.os.SetModTargetDeltaTime(1/60)
 
 -- Enable performance logging. 0 = off, 1 = all, 2 = limited
-local profiling = 2
+local profiling = 1
 
 local profiling_structure_checking_time = 0
 local profiling_ui_time = 0
@@ -14,9 +14,10 @@ local profiling_local_gravity_time = 0
 local profiling_mod_start_time = 0
 
 -- Config
-local motorcycle_buff = 400 -- How much of a power increase should motorcycles get?
-local local_gravity_magnet_fling_duration = 1.5 -- How long the magnet fling lasts for (in seconds & divisible by 60)
-local local_gravity_magnet_fling_strength = 2 -- Strength for magnet fling
+local local_gravity = false -- Toggle Local Gravity on/off
+local local_gravity_magnet_fling_duration = 1.5 -- How long the magnet fling lasts for (seconds) | Default: 1.5
+local local_gravity_magnet_fling_strength = 2 -- Strength for magnet fling | Default: 2
+local motorcycle_buff = 400 -- How much of a power increase should motorcycles get? | Default: 400
 
 player_data = {}
 function OnPlayerJoined(player)
@@ -34,7 +35,9 @@ function OnPlayerJoined(player)
         selected_engine_cc = 0,
         engines = {},
         HasGroundContact = true,
-        magnet_duration = 0
+        magnet_duration = 0,
+        ui_visible = false,
+        banned_blocks_ui_size = 0
     }
 end
 tm.players.OnPlayerJoined.add(OnPlayerJoined)
@@ -166,18 +169,35 @@ local engine_cc_list = { -- this holds the RGB color for paints, and then what e
 }
 --tm.playerUI.AddSubtleMessageForAllPlayers("KartMakers", "Subtle message icon test", 10, "icon")
 
+if local_gravity==true then tm.physics.SetGravityMultiplier(0) tm.playerUI.AddSubtleMessageForAllPlayers("KartMakers", "Playing with Local Gravity", 3, "icon") end
+
+function ClearUIWindow(playerId)
+    tm.playerUI.RemoveUI(playerId, "error.banned_blocks")
+    tm.playerUI.RemoveUI(playerId, "error.too_many_engines")
+    tm.playerUI.RemoveUI(playerId, "selected_block.engine_power")
+    tm.playerUI.RemoveUI(playerId, "selected_block.buoyancy")
+    tm.playerUI.RemoveUI(playerId, "selected_block.mass")
+    tm.playerUI.RemoveUI(playerId, "selected_block.secondary_color")
+    tm.playerUI.RemoveUI(playerId, "selected_block.name")
+    tm.playerUI.RemoveUI(playerId, "newline")
+    tm.playerUI.RemoveUI(playerId, "total_weight")
+    tm.playerUI.RemoveUI(playerId, "total_buoyancy")
+    for i = 0,player_data[playerId].banned_blocks_ui_size do
+        tm.playerUI.RemoveUI(playerId, "error.banned_blocks-".. i)
+    end
+end
+
 function update()
     if profiling==1 then profiling_mod_start_time = tm.os.GetRealtimeSinceStartup() profiling_structure_checking_time = 0 profiling_ui_time = 0 profiling_local_gravity_time = 0 end
 
     local players = tm.players.CurrentPlayers()
     for _, player in ipairs(players) do
         local playerId = player.playerId
-        tm.playerUI.ClearUI(playerId)
         CheckStructures(playerId)
         UpdateUI(playerId)
 
         -- Proof-of-concept for per-player no-gravity toggle (it doesnt work perfectly)
-        ApplyLocalGravity(playerId) tm.physics.SetGravityMultiplier(0)
+        if local_gravity==true then ApplyLocalGravity(playerId) end
     end
 
     if profiling==1 then PrintProfilingData(tm.os.GetRealtimeSinceStartup()) end
@@ -263,27 +283,29 @@ function CheckStructures(playerId)
         for _,structure in ipairs(structures) do
             live_block_count = live_block_count + #structure.GetBlocks()
         end
-        for i,_ in ipairs(player_data[playerId].engines) do
-            if player_data[playerId].engines[i].block.Exists() then
-            local block = player_data[playerId].engines[i].block
-            local power = 0
-            for j,_ in pairs(engine_cc_list) do
-                if block.GetSecondaryColor().ToString()==engine_cc_list[j].color then
-                    power = engine_cc_list[j].cc*22.22
-                    player_data[playerId].selected_engine_cc = engine_cc_list[j].cc
-                    if player_data[playerId].wheels[1].amount==2 or player_data[playerId].wheels[2].amount==2 then
-                        power = power + motorcycle_buff
+        if player_data[playerId].has_banned_blocks==false and #player_data[playerId].engines<2 then
+            for i,_ in ipairs(player_data[playerId].engines) do
+                if player_data[playerId].engines[i].block.Exists() then
+                local block = player_data[playerId].engines[i].block
+                local power = 0
+                for j,_ in pairs(engine_cc_list) do
+                    if block.GetSecondaryColor().ToString()==engine_cc_list[j].color then
+                        power = engine_cc_list[j].cc*22.22
+                        player_data[playerId].selected_engine_cc = engine_cc_list[j].cc
+                        if player_data[playerId].wheels[1].amount==2 or player_data[playerId].wheels[2].amount==2 then
+                            power = power + motorcycle_buff
+                        end
+                        break
                     end
-                    break
                 end
-            end
-            if block.GetEnginePower() ~= power then
-                if profiling>0 then
-                    tm.os.Log(tm.players.GetPlayerName(playerId).. " (".. playerId.. ")'s engine power is out of sync, updating...")
+                if block.GetEnginePower() ~= power then
+                    if profiling>0 then
+                        tm.os.Log(tm.players.GetPlayerName(playerId).. " (".. playerId.. ")'s engine power is out of sync, updating...")
+                    end
+                    tm.audio.PlayAudioAtGameobject("Build_attach_Weapon", tm.players.GetPlayerGameObject(playerId))
+                    block.SetEnginePower(power)
                 end
-                tm.audio.PlayAudioAtGameobject("Build_attach_Weapon", tm.players.GetPlayerGameObject(playerId))
-                block.SetEnginePower(power)
-            end
+                end
             end
         end
         if live_block_count ~= player_data[playerId].block_count then
@@ -388,55 +410,99 @@ end
 
 function UpdateUI(playerId)
     local profiling_ui_start_time = tm.os.GetRealtimeSinceStartup()
-    if tm.players.GetPlayerIsInBuildMode(playerId)==true then
+    if not tm.players.GetPlayerIsInBuildMode(playerId) then
+        ClearUIWindow(playerId)
+        player_data[playerId].ui_visible = false
+        return
+    end
+
+    tm.playerUI.RemoveUI(playerId, "error.banned_blocks")
+    for i = 0,player_data[playerId].banned_blocks_ui_size do
+        tm.playerUI.RemoveUI(playerId, "error.banned_blocks-".. i)
+    end
+    tm.playerUI.RemoveUI(playerId, "error.too_many_engines")
+    if player_data[playerId].has_banned_blocks==true then
+        tm.playerUI.AddUILabel(playerId, "error.banned_blocks", "<b><color=#E22>Your kart has banned blocks!</color></b>")
+        player_data[playerId].banned_blocks_ui_size = 0
+        for i,_ in ipairs(player_data[playerId].banned_blocks) do
+            tm.playerUI.AddUILabel(playerId, "error.banned_blocks-".. i, "<i>".. player_data[playerId].banned_blocks[i].. "</i>")
+            player_data[playerId].banned_blocks_ui_size = player_data[playerId].banned_blocks_ui_size + 1
+        end
+        tm.audio.PlayAudioAtGameobject("Build_rotate_weapon", tm.players.GetPlayerGameObject(playerId))
+        return
+    end
+    if player_data[playerId].total_engines>1 then
+        tm.playerUI.AddUILabel(playerId, "error.too_many_engines", "<b><color=#E22>You can only have one engine!</color></b>")
+        tm.audio.PlayAudioAtGameobject("Build_rotate_weapon", tm.players.GetPlayerGameObject(playerId))
+        return
+    end
+
+
+    if player_data[playerId].ui_visible == true then
         if player_data[playerId].has_banned_blocks==false then
-        if player_data[playerId].total_engines<2 then
-        tm.playerUI.AddUILabel(playerId, "totalbuoyancy", string.format("%.1f", player_data[playerId].total_buoyancy).. "kg total vehicle buoyancy")
-        tm.playerUI.AddUILabel(playerId, "totalweight", string.format("%.1f", player_data[playerId].total_weight).. "kg total vehicle weight") -- Inaccurate vehicle weight isn't a bug; steering hinge has a misleading in-game weight value   
+            if player_data[playerId].total_engines<2 then
+                tm.playerUI.SetUIValue(playerId, "total_buoyancy", string.format("%.1f", player_data[playerId].total_buoyancy).. "kg total vehicle buoyancy")
+                tm.playerUI.SetUIValue(playerId, "total_weight", string.format("%.1f", player_data[playerId].total_weight).. "kg total vehicle weight")
 
-        if tm.players.GetPlayerSelectBlockInBuild(playerId)~=nil then
-            tm.playerUI.AddUILabel(playerId, "spacer", "")
-            tm.playerUI.AddUILabel(playerId, "selectedblock-name", "".. string.sub(tm.players.GetPlayerSelectBlockInBuild(playerId).GetName(), 5, -10).. "")
-
-            -- Get hex code of the selected block's primary color
-            --local color = tm.players.GetPlayerSelectBlockInBuild(playerId).GetPrimaryColor()
-            --local rgb = (color.R()*255 * 0x10000) + (color.G()*255 * 0x100) + color.B()*255
-            --local phex = string.format("%06x", rgb)
-
-            -- Get hex code of the selected block's secondary color
-            local color = tm.players.GetPlayerSelectBlockInBuild(playerId).GetSecondaryColor()
-            local rgb = (color.R()*255 * 0x10000) + (color.G()*255 * 0x100) + color.B()*255
-            local shex = string.format("%06x", rgb)
-
-            -- Primary color display is disabled due to prevent UI flickering.
-            --tm.playerUI.AddUILabel(playerId, "selectedblock-pcolor", "Primary color: <color=#".. phex.. ">██</color> #".. phex)
-            tm.playerUI.AddUILabel(playerId, "selectedblock-scolor", "Secondary color: <color=#".. shex.. ">██</color> #".. shex)
-            tm.playerUI.AddUILabel(playerId, "selectedblock-mass", "Weight: ".. string.format("%0.1f", tm.players.GetPlayerSelectBlockInBuild(playerId).GetMass()*5) .. "kg")
-            tm.playerUI.AddUILabel(playerId, "selectedblock-buoyancy", "Buoyancy: ".. string.format("%0.1f", tm.players.GetPlayerSelectBlockInBuild(playerId).GetBuoyancy()*5) .. "kg")
-
-            if tm.players.GetPlayerSelectBlockInBuild(playerId).IsEngineBlock() then
-                if tm.players.GetPlayerSelectBlockInBuild(playerId).GetEnginePower() ~= 0 then
-                    tm.playerUI.AddUILabel(playerId, "selectedblock-enginepower", player_data[playerId].selected_engine_cc .. "cc | ".. tm.players.GetPlayerSelectBlockInBuild(playerId).GetEnginePower().. " power")
+                local block = tm.players.GetPlayerSelectBlockInBuild(playerId)
+                if block~=nil then
+                    -- Get hex code of the selected block's secondary color
+                    local color = block.GetSecondaryColor()
+                    local rgb = (color.R()*255 * 0x10000) + (color.G()*255 * 0x100) + color.B()*255
+                    local shex = string.format("%06x", rgb)
+                    
+                    if player_data[playerId].selected_block_ui_visible==true then
+                        tm.playerUI.SetUIValue(playerId, "selected_block.name", string.sub(block.GetName(), 5, -10))
+                        tm.playerUI.SetUIValue(playerId, "selected_block.mass", "Weight: ".. string.format("%0.1f", block.GetMass()*5) .. "kg")
+                        tm.playerUI.SetUIValue(playerId, "selected_block.buoyancy", "Buoyancy: ".. string.format("%0.1f", block.GetBuoyancy()*5) .. "kg")
+                        tm.playerUI.SetUIValue(playerId, "selected_block.secondary_color", "Secondary color: <color=#".. shex.. ">██</color> #".. shex)
+                        if block.IsEngineBlock() then
+                            local engine_power = block.GetEnginePower()
+                            if engine_power ~= 0 then
+                                tm.playerUI.SetUIValue(playerId, "selected_block.engine_power", player_data[playerId].selected_engine_cc .. "cc | ".. engine_power.. " power")
+                            else
+                                tm.playerUI.SetUIValue(playerId, "selected_block.engine_power", "<color=#FAA>Invalid secondary color!</color>") 
+                            end
+                        else
+                            tm.playerUI.SetUIValue(playerId, "selected_block.engine_power", "<color=#666>N/A</color>") 
+                        end
+                    else
+                        tm.playerUI.AddUILabel(playerId, "newline", "")
+                        tm.playerUI.AddUILabel(playerId, "selected_block.name", string.sub(tm.players.GetPlayerSelectBlockInBuild(playerId).GetName(), 5, -10))
+                        tm.playerUI.AddUILabel(playerId, "selected_block.mass", "Weight: ".. string.format("%0.1f", tm.players.GetPlayerSelectBlockInBuild(playerId).GetMass()*5) .. "kg")
+                        tm.playerUI.AddUILabel(playerId, "selected_block.buoyancy", "Buoyancy: ".. string.format("%0.1f", tm.players.GetPlayerSelectBlockInBuild(playerId).GetBuoyancy()*5) .. "kg")
+                        tm.playerUI.AddUILabel(playerId, "selected_block.secondary_color", "Secondary color: <color=#".. shex.. ">██</color> #".. shex)
+                        if block.IsEngineBlock() then
+                            local engine_power = block.GetEnginePower()
+                            if engine_power ~= 0 then
+                                tm.playerUI.AddUILabel(playerId, "selected_block.engine_power", player_data[playerId].selected_engine_cc .. "cc | ".. engine_power.. " power")
+                            else
+                                tm.playerUI.AddUILabel(playerId, "selected_block.engine_power", "<color=#FAA>Invalid secondary color!</color>") 
+                            end
+                        else
+                            tm.playerUI.AddUILabel(playerId, "selected_block.engine_power", "<color=#666>N/A</color>") 
+                        end
+                        player_data[playerId].selected_block_ui_visible = true
+                    end
                 else
-                    tm.playerUI.AddUILabel(playerId, "selectedblock-enginepower", "<color=#FAA>Invalid secondary color!</color>") 
+                    player_data[playerId].selected_block_ui_visible = false
+                    tm.playerUI.RemoveUI(playerId, "newline")
+                    tm.playerUI.RemoveUI(playerId, "selected_block.name")
+                    tm.playerUI.RemoveUI(playerId, "selected_block.mass")
+                    tm.playerUI.RemoveUI(playerId, "selected_block.buoyancy")
+                    tm.playerUI.RemoveUI(playerId, "selected_block.secondary_color")
+                    tm.playerUI.RemoveUI(playerId, "selected_block.engine_power")
                 end
             end
         end
-        else
-            tm.playerUI.AddUILabel(playerId, "toomanyengines", "<b><color=#E22>You can only have one engine!</color></b>")
-            tm.audio.PlayAudioAtGameobject("Build_rotate_weapon", tm.players.GetPlayerGameObject(playerId))
-        end
-        else
-            tm.playerUI.AddUILabel(playerId, "banned-blocks", "<b><color=#E22>Your kart has banned blocks!</color></b>")
-            for i,_ in ipairs(player_data[playerId].banned_blocks) do
-                tm.playerUI.AddUILabel(playerId, "banned-blocks-"..i, "<i>".. player_data[playerId].banned_blocks[i].. "</i>")
-            end
-            tm.audio.PlayAudioAtGameobject("Build_rotate_weapon", tm.players.GetPlayerGameObject(playerId))
-        end
-        if profiling==1 then
-            local endtime = tm.os.GetRealtimeSinceStartup()
-            profiling_ui_time = profiling_ui_time + endtime-profiling_ui_start_time
-        end
+    else
+        player_data[playerId].ui_visible = true
+        tm.playerUI.AddUILabel(playerId, "total_buoyancy", string.format("%.1f", player_data[playerId].total_buoyancy).. "kg total vehicle buoyancy")
+        tm.playerUI.AddUILabel(playerId, "total_weight", string.format("%.1f", player_data[playerId].total_weight).. "kg total vehicle weight") -- Inaccurate vehicle weight isn't a bug; steering hinge has a misleading in-game weight value   
+    end
+    if profiling==1 then
+        local endtime = tm.os.GetRealtimeSinceStartup()
+        profiling_ui_time = profiling_ui_time + endtime-profiling_ui_start_time
     end
 end
 
