@@ -6,7 +6,7 @@ tm.physics.AddTexture("KartOutline.png", "icon")
 tm.os.SetModTargetDeltaTime(1/60)
 
 -- Enable performance logging. 0 = off, 1 = all, 2 = limited
-local profiling = 1
+local profiling = 0
 
 local profiling_structure_checking_time = 0
 local profiling_ui_time = 0
