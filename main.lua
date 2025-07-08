@@ -1,15 +1,22 @@
 tm.os.Log("KartMakers by HormaV5 (Project lead), RainlessSky (Programmer), Antimatterdev (Fake programmer)")
 tm.os.Log("")
 
+tm.physics.AddTexture("KartOutline.png", "icon")
+
+tm.os.SetModTargetDeltaTime(1/60)
+
 -- Enable performance logging. 0 = off, 1 = all, 2 = limited
 local profiling = 2
 
 local profiling_structure_checking_time = 0
 local profiling_ui_time = 0
+local profiling_local_gravity_time = 0
 local profiling_mod_start_time = 0
 
 -- Config
 local motorcycle_buff = 400 -- How much of a power increase should motorcycles get?
+local local_gravity_magnet_fling_duration = 1.5 -- How long the magnet fling lasts for (in seconds & divisible by 60)
+local local_gravity_magnet_fling_strength = 2 -- Strength for magnet fling
 
 player_data = {}
 function OnPlayerJoined(player)
@@ -25,7 +32,9 @@ function OnPlayerJoined(player)
             {type="3x3x2",amount=0}
         },
         selected_engine_cc = 0,
-        engines = {}
+        engines = {},
+        HasGroundContact = true,
+        magnet_duration = 0
     }
 end
 tm.players.OnPlayerJoined.add(OnPlayerJoined)
@@ -155,9 +164,10 @@ local engine_cc_list = { -- this holds the RGB color for paints, and then what e
     {color="RGBA(0.741, 0.110, 0.110, 1.000)", cc=150},
     {color="RGBA(0.443, 0.000, 0.000, 1.000)", cc=200}
 }
+--tm.playerUI.AddSubtleMessageForAllPlayers("KartMakers", "Subtle message icon test", 10, "icon")
 
 function update()
-    if profiling==1 then profiling_mod_start_time = tm.os.GetRealtimeSinceStartup() profiling_structure_checking_time = 0 profiling_ui_time = 0 end
+    if profiling==1 then profiling_mod_start_time = tm.os.GetRealtimeSinceStartup() profiling_structure_checking_time = 0 profiling_ui_time = 0 profiling_local_gravity_time = 0 end
 
     local players = tm.players.CurrentPlayers()
     for _, player in ipairs(players) do
@@ -167,45 +177,81 @@ function update()
         UpdateUI(playerId)
 
         -- Proof-of-concept for per-player no-gravity toggle (it doesnt work perfectly)
-        ApplyLocalGravity(playerId)
+        ApplyLocalGravity(playerId) tm.physics.SetGravityMultiplier(0)
     end
 
     if profiling==1 then PrintProfilingData(tm.os.GetRealtimeSinceStartup()) end
-    tm.os.SetModTargetDeltaTime(1/60)
 end
 
 function ApplyLocalGravity(playerId)
+    local profiling_local_gravity_start_time = tm.os.GetRealtimeSinceStartup()
     -- Check if player is in a seat
     if not tm.players.IsPlayerInSeat(playerId) then return end
 
     local seatBlock = tm.players.GetPlayerSeatBlock(playerId)
-    if not seatBlock or not seatBlock.Exists() then return end
 
     local structure = seatBlock.GetStructure()
-    if not structure then return end
 
     local weight = player_data[playerId] and player_data[playerId].total_weight
-    if not weight then return end
+    if not weight then return "Structure weight is invalid" end
 
-    local localDown = tm.vector3.Create(0, -1, 0)
-    local worldDown = seatBlock.TransformDirection(localDown) -- rotated downward vector should be rotated local to player
+    local worldFront = seatBlock.Forward() -- rotated downward vector should be rotated local to player
+    local worldDown = seatBlock.TransformDirection(tm.vector3.Create(0, -1, 0)) -- rotated downward vector should be rotated local to player
+    local worldMagnet = tm.vector3.Lerp(worldFront, worldDown, 0.5)
 
     local origin = seatBlock.GetPosition()
-    local rayLength = 5
+    local rayLength = 3
     local rayEnd = origin + (worldDown * rayLength)
 
     local hit = tm.physics.RaycastData(origin, worldDown, rayLength, false)
+
+    local deltatime = (60*tm.os.GetModDeltaTime())
+    local gravityStrength = weight * 0.055 * deltatime
+
+    local local_gravity_magnet_fling_duration = local_gravity_magnet_fling_duration * 60
 
     if hit and hit.DidHit() then
         local hitNormal = hit.GetHitNormal()
 
         --tm.os.Log("Ground normal: " .. tostring(hitNormal))
         -- 0.33
-        local gravityStrength = weight * 0.055
         structure.AddForce(worldDown.x * gravityStrength, worldDown.y * gravityStrength, worldDown.z * gravityStrength)
+        player_data[playerId].HasGroundContact = true
+        if player_data[playerId].magnet_duration > 0 then
+            player_data[playerId].magnet_duration = 0
+            tm.audio.PlayAudioAtGameobject("Block_Magnet_Stop", tm.players.GetPlayerGameObject(playerId))
+        end
     else
-        local gravityStrength = weight * 0.055
-        structure.AddForce(0, -gravityStrength, 0)
+        if player_data[playerId].HasGroundContact==true then
+            player_data[playerId].magnet_duration = local_gravity_magnet_fling_duration -- Duration in mod updates (60 = 1 second) magnet fling lasts for
+            if profiling>0 then tm.os.Log(tm.players.GetPlayerName(playerId).. " got magnet fling") end
+            tm.audio.PlayAudioAtGameobject("Block_Magnet_Start", tm.players.GetPlayerGameObject(playerId))
+        else
+            structure.AddForce(0, -gravityStrength, 0)
+        end
+        player_data[playerId].HasGroundContact = false
+    end
+
+    if player_data[playerId].magnet_duration > 0 then
+        local magnet_remaining = player_data[playerId].magnet_duration / local_gravity_magnet_fling_duration
+        local a = magnet_remaining
+        local b = a^2
+        local easing = b/(2*(b-a)+1) -- Ease in/out, probably
+        local multiplier = gravityStrength * easing*local_gravity_magnet_fling_strength
+
+        --tm.os.Log(tm.players.GetPlayerName(playerId).. " currently has ".. string.format("%0.1f", player_data[playerId].magnet_duration/60) .. " seconds magnet duration left @ ".. string.format("%0.1f", easing*100) .. "%")
+
+        local worldMagnet = tm.vector3.Lerp(seatBlock.Forward(), seatBlock.TransformDirection(tm.vector3.Create(0, -1, 0)), magnet_remaining) -- Switch "magnet_remaining" to "easing" to use ease in/out instead of linear
+        structure.AddForce(worldMagnet.x * multiplier, worldMagnet.y * multiplier, worldMagnet.z * multiplier)
+        
+        player_data[playerId].magnet_duration = player_data[playerId].magnet_duration - 1
+        if player_data[playerId].magnet_duration==0 then
+            tm.audio.PlayAudioAtGameobject("Block_Magnet_Stop", tm.players.GetPlayerGameObject(playerId))
+        end
+    end
+
+    if profiling==1 then
+        profiling_local_gravity_time = profiling_local_gravity_time + tm.os.GetRealtimeSinceStartup()-profiling_local_gravity_start_time
     end
 end
 
@@ -232,7 +278,7 @@ function CheckStructures(playerId)
                 end
             end
             if block.GetEnginePower() ~= power then
-                if profiling==2 then
+                if profiling>0 then
                     tm.os.Log(tm.players.GetPlayerName(playerId).. " (".. playerId.. ")'s engine power is out of sync, updating...")
                 end
                 tm.audio.PlayAudioAtGameobject("Build_attach_Weapon", tm.players.GetPlayerGameObject(playerId))
@@ -241,10 +287,10 @@ function CheckStructures(playerId)
             end
         end
         if live_block_count ~= player_data[playerId].block_count then
-            if profiling==2 then
+            if profiling>0 then
                 tm.os.Log("Build was updated for ".. tm.players.GetPlayerName(playerId).. " (".. playerId.. "), updating data...")
-                tm.os.Log("Build has ".. live_block_count.. " blocks right now")
-                tm.os.Log("Build had ".. player_data[playerId].block_count.. " blocks")
+                --tm.os.Log("Build has ".. live_block_count.. " blocks right now")
+                --tm.os.Log("Build had ".. player_data[playerId].block_count.. " blocks")
             end
             player_data[playerId].block_count = live_block_count
             tm.audio.PlayAudioAtGameobject("Build_attach_Flag", tm.players.GetPlayerGameObject(playerId))
@@ -378,13 +424,14 @@ function UpdateUI(playerId)
         end
         else
             tm.playerUI.AddUILabel(playerId, "toomanyengines", "<b><color=#E22>You can only have one engine!</color></b>")
+            tm.audio.PlayAudioAtGameobject("Build_rotate_weapon", tm.players.GetPlayerGameObject(playerId))
         end
         else
             tm.playerUI.AddUILabel(playerId, "banned-blocks", "<b><color=#E22>Your kart has banned blocks!</color></b>")
             for i,_ in ipairs(player_data[playerId].banned_blocks) do
                 tm.playerUI.AddUILabel(playerId, "banned-blocks-"..i, "<i>".. player_data[playerId].banned_blocks[i].. "</i>")
             end
-            tm.audio.PlayAudioAtGameobject("Block_BombRack_Reload", tm.players.GetPlayerGameObject(playerId))
+            tm.audio.PlayAudioAtGameobject("Build_rotate_weapon", tm.players.GetPlayerGameObject(playerId))
         end
         if profiling==1 then
             local endtime = tm.os.GetRealtimeSinceStartup()
@@ -404,7 +451,12 @@ function PrintProfilingData(profiling_mod_end_time)
     else
         tm.os.Log("<0.01 ms for ui")
     end
-    local overhead = (profiling_mod_end_time-profiling_mod_start_time)-(profiling_structure_checking_time+profiling_ui_time)
+    if profiling_local_gravity_time~=0 then
+        tm.os.Log(" ".. string.format("%0.4s", profiling_local_gravity_time*1000) .. " ms for local gravity")
+    else
+        tm.os.Log("<0.01 ms for local gravity")
+    end
+    local overhead = (profiling_mod_end_time-profiling_mod_start_time)-(profiling_structure_checking_time+profiling_ui_time+profiling_local_gravity_time)
     if overhead~=0 then
         tm.os.Log(" ".. string.format("%0.4s", overhead*1000) .. " ms overhead")
     else
