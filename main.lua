@@ -14,10 +14,10 @@ local profiling_local_gravity_time = 0
 local profiling_mod_start_time = 0
 
 -- Config
-local local_gravity = true -- Toggle Local Gravity on/off
-local magnet_fling = false -- Toggle Magnet Fling on/off
+local local_gravity = false -- Toggle Local Gravity on/off
+local magnet_fling = true -- Toggle Magnet Fling on/off
 local magnet_fling_duration = 1.5 -- How long the magnet fling lasts for (seconds) | Default: 1.5
-local magnet_fling_duration = 2 -- Strength for magnet fling | Default: 2
+local magnet_fling_strength = 2 -- Strength for magnet fling | Default: 2
 local motorcycle_buff = 400 -- How much of a power increase should motorcycles get? | Default: 400
 
 player_data = {}
@@ -230,11 +230,12 @@ function ApplyLocalGravity(playerId)
             tm.audio.PlayAudioAtGameobject("Block_Magnet_Stop", tm.players.GetPlayerGameObject(playerId))
         end
     else
-        if magnet_fling==false then return end
         if player_data[playerId].HasGroundContact==true then
+            if magnet_fling==true then
             player_data[playerId].magnet_duration = magnet_fling_duration -- Duration in mod updates (60 = 1 second) magnet fling lasts for
             if profiling>0 then tm.os.Log(tm.players.GetPlayerName(playerId).. " got magnet fling") end
             tm.audio.PlayAudioAtGameobject("Block_Magnet_Start", tm.players.GetPlayerGameObject(playerId))
+            end
         else
             structure.AddForce(0, -gravityStrength, 0)
         end
@@ -246,7 +247,7 @@ function ApplyLocalGravity(playerId)
         local a = magnet_remaining
         local b = a^2
         local easing = b/(2*(b-a)+1) -- Ease in/out, probably
-        local multiplier = gravityStrength * easing*magnet_fling_duration
+        local multiplier = gravityStrength * easing*magnet_fling_strength
 
         --tm.os.Log(tm.players.GetPlayerName(playerId).. " currently has ".. string.format("%0.1f", player_data[playerId].magnet_duration/60) .. " seconds magnet duration left @ ".. string.format("%0.1f", easing*100) .. "%")
 
