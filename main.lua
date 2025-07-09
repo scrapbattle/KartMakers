@@ -14,9 +14,10 @@ local profiling_local_gravity_time = 0
 local profiling_mod_start_time = 0
 
 -- Config
-local local_gravity = false -- Toggle Local Gravity on/off
-local local_gravity_magnet_fling_duration = 1.5 -- How long the magnet fling lasts for (seconds) | Default: 1.5
-local local_gravity_magnet_fling_strength = 2 -- Strength for magnet fling | Default: 2
+local local_gravity = true -- Toggle Local Gravity on/off
+local magnet_fling = false -- Toggle Magnet Fling on/off
+local magnet_fling_duration = 1.5 -- How long the magnet fling lasts for (seconds) | Default: 1.5
+local magnet_fling_duration = 2 -- Strength for magnet fling | Default: 2
 local motorcycle_buff = 400 -- How much of a power increase should motorcycles get? | Default: 400
 
 player_data = {}
@@ -170,22 +171,7 @@ local engine_cc_list = { -- this holds the RGB color for paints, and then what e
 --tm.playerUI.AddSubtleMessageForAllPlayers("KartMakers", "Subtle message icon test", 10, "icon")
 
 if local_gravity==true then tm.physics.SetGravityMultiplier(0) tm.playerUI.AddSubtleMessageForAllPlayers("KartMakers", "Playing with Local Gravity", 3, "icon") end
-
-function ClearUIWindow(playerId)
-    tm.playerUI.RemoveUI(playerId, "error.banned_blocks")
-    tm.playerUI.RemoveUI(playerId, "error.too_many_engines")
-    tm.playerUI.RemoveUI(playerId, "selected_block.engine_power")
-    tm.playerUI.RemoveUI(playerId, "selected_block.buoyancy")
-    tm.playerUI.RemoveUI(playerId, "selected_block.mass")
-    tm.playerUI.RemoveUI(playerId, "selected_block.secondary_color")
-    tm.playerUI.RemoveUI(playerId, "selected_block.name")
-    tm.playerUI.RemoveUI(playerId, "newline")
-    tm.playerUI.RemoveUI(playerId, "total_weight")
-    tm.playerUI.RemoveUI(playerId, "total_buoyancy")
-    for i = 0,player_data[playerId].banned_blocks_ui_size do
-        tm.playerUI.RemoveUI(playerId, "error.banned_blocks-".. i)
-    end
-end
+if magnet_fling ==true then tm.playerUI.AddSubtleMessageForAllPlayers("KartMakers", "Playing with Magnet Fling", 3, "icon") end
 
 function update()
     if profiling==1 then profiling_mod_start_time = tm.os.GetRealtimeSinceStartup() profiling_structure_checking_time = 0 profiling_ui_time = 0 profiling_local_gravity_time = 0 end
@@ -196,8 +182,8 @@ function update()
         CheckStructures(playerId)
         UpdateUI(playerId)
 
-        -- Proof-of-concept for per-player no-gravity toggle (it doesnt work perfectly)
-        if local_gravity==true then ApplyLocalGravity(playerId) end
+        -- Per-player anti-gravity toggle
+        if local_gravity==true or magnet_fling==true then ApplyLocalGravity(playerId) end
     end
 
     if profiling==1 then PrintProfilingData(tm.os.GetRealtimeSinceStartup()) end
@@ -223,27 +209,30 @@ function ApplyLocalGravity(playerId)
     local rayLength = 3
     local rayEnd = origin + (worldDown * rayLength)
 
-    local hit = tm.physics.RaycastData(origin, worldDown, rayLength, false)
+    local hit = tm.physics.RaycastData(origin, worldDown, rayLength, true)
 
-    local deltatime = (60*tm.os.GetModDeltaTime())
-    local gravityStrength = weight * 0.055 * deltatime
+    local deltatime = (1/tm.os.GetModTargetDeltaTime())*tm.os.GetModDeltaTime()
+    local gravityStrength = (weight * 0.047) * deltatime
+    --tm.os.Log(deltatime)
 
-    local local_gravity_magnet_fling_duration = local_gravity_magnet_fling_duration * 60
+    local magnet_fling_duration = magnet_fling_duration * 60
 
     if hit and hit.DidHit() then
         local hitNormal = hit.GetHitNormal()
 
         --tm.os.Log("Ground normal: " .. tostring(hitNormal))
         -- 0.33
-        structure.AddForce(worldDown.x * gravityStrength, worldDown.y * gravityStrength, worldDown.z * gravityStrength)
+        if local_gravity==true then structure.AddForce(worldDown.x * gravityStrength, worldDown.y * gravityStrength, worldDown.z * gravityStrength) end
+        if magnet_fling==false then return end
         player_data[playerId].HasGroundContact = true
         if player_data[playerId].magnet_duration > 0 then
             player_data[playerId].magnet_duration = 0
             tm.audio.PlayAudioAtGameobject("Block_Magnet_Stop", tm.players.GetPlayerGameObject(playerId))
         end
     else
+        if magnet_fling==false then return end
         if player_data[playerId].HasGroundContact==true then
-            player_data[playerId].magnet_duration = local_gravity_magnet_fling_duration -- Duration in mod updates (60 = 1 second) magnet fling lasts for
+            player_data[playerId].magnet_duration = magnet_fling_duration -- Duration in mod updates (60 = 1 second) magnet fling lasts for
             if profiling>0 then tm.os.Log(tm.players.GetPlayerName(playerId).. " got magnet fling") end
             tm.audio.PlayAudioAtGameobject("Block_Magnet_Start", tm.players.GetPlayerGameObject(playerId))
         else
@@ -253,11 +242,11 @@ function ApplyLocalGravity(playerId)
     end
 
     if player_data[playerId].magnet_duration > 0 then
-        local magnet_remaining = player_data[playerId].magnet_duration / local_gravity_magnet_fling_duration
+        local magnet_remaining = player_data[playerId].magnet_duration / magnet_fling_duration
         local a = magnet_remaining
         local b = a^2
         local easing = b/(2*(b-a)+1) -- Ease in/out, probably
-        local multiplier = gravityStrength * easing*local_gravity_magnet_fling_strength
+        local multiplier = gravityStrength * easing*magnet_fling_duration
 
         --tm.os.Log(tm.players.GetPlayerName(playerId).. " currently has ".. string.format("%0.1f", player_data[playerId].magnet_duration/60) .. " seconds magnet duration left @ ".. string.format("%0.1f", easing*100) .. "%")
 
@@ -405,6 +394,22 @@ function CheckStructures(playerId)
         if profiling==1 then
             profiling_structure_checking_time = profiling_structure_checking_time + tm.os.GetRealtimeSinceStartup()-profiling_structure_checking_start_time
         end
+    end
+end
+
+function ClearUIWindow(playerId)
+    tm.playerUI.RemoveUI(playerId, "error.banned_blocks")
+    tm.playerUI.RemoveUI(playerId, "error.too_many_engines")
+    tm.playerUI.RemoveUI(playerId, "selected_block.engine_power")
+    tm.playerUI.RemoveUI(playerId, "selected_block.buoyancy")
+    tm.playerUI.RemoveUI(playerId, "selected_block.mass")
+    tm.playerUI.RemoveUI(playerId, "selected_block.secondary_color")
+    tm.playerUI.RemoveUI(playerId, "selected_block.name")
+    tm.playerUI.RemoveUI(playerId, "newline")
+    tm.playerUI.RemoveUI(playerId, "total_weight")
+    tm.playerUI.RemoveUI(playerId, "total_buoyancy")
+    for i = 0,player_data[playerId].banned_blocks_ui_size do
+        tm.playerUI.RemoveUI(playerId, "error.banned_blocks-".. i)
     end
 end
 
