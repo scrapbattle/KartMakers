@@ -245,9 +245,18 @@ function ApplyLocalGravity(playerId)
     if player_data[playerId].magnet_duration > 0 then
         local magnet_remaining = player_data[playerId].magnet_duration / magnet_fling_duration
         local a = magnet_remaining
-        local b = a^2
-        local easing = b/(2*(b-a)+1) -- Ease in/out, probably
+        local a2 = a^2
+
+        -- Exponential in/out easing (I think regular ease in/out is better)
+        --local easing = 0.5 -- Fallback value
+        --if a <= 0.5 then
+            --easing = 0.5 * 2^(20*(a - 0.5))
+        --else
+            --easing = 0.5 * (-(2^-(20*(a - 0.5))) + 2)
+        --end
+        local easing = a2/(2*(a2-a)+1) -- Ease in/out, probably
         local multiplier = gravityStrength * easing*magnet_fling_strength
+        --tm.os.Log(string.format("%0.2f", easing)*100 .. "% provides ".. string.format("%0.2f", multiplier).. " multiplier")
 
         --tm.os.Log(tm.players.GetPlayerName(playerId).. " currently has ".. string.format("%0.1f", player_data[playerId].magnet_duration/60) .. " seconds magnet duration left @ ".. string.format("%0.1f", easing*100) .. "%")
 
