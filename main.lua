@@ -14,7 +14,7 @@ local profiling_local_gravity_time = 0
 local profiling_mod_start_time = 0
 
 -- Config
-local local_gravity = false -- Toggle Local Gravity on/off
+local local_gravity = true -- Toggle Local Gravity on/off
 local magnet_fling = true -- Toggle Magnet Fling on/off
 local magnet_fling_duration = 1.5 -- How long the magnet fling lasts for (seconds) | Default: 1.5
 local magnet_fling_strength = 2 -- Strength for magnet fling | Default: 2
@@ -38,7 +38,9 @@ function OnPlayerJoined(player)
         HasGroundContact = true,
         magnet_duration = 0,
         ui_visible = false,
-        banned_blocks_ui_size = 0
+        banned_blocks_ui_size = 0,
+        banned_blocks_ui_visible = false,
+        too_many_engines_ui_visible = false
     }
 end
 tm.players.OnPlayerJoined.add(OnPlayerJoined)
@@ -408,35 +410,56 @@ function CheckStructures(playerId)
 end
 
 function ClearUIWindow(playerId)
-    tm.playerUI.RemoveUI(playerId, "error.banned_blocks")
-    tm.playerUI.RemoveUI(playerId, "error.too_many_engines")
-    tm.playerUI.RemoveUI(playerId, "selected_block.engine_power")
-    tm.playerUI.RemoveUI(playerId, "selected_block.buoyancy")
-    tm.playerUI.RemoveUI(playerId, "selected_block.mass")
-    tm.playerUI.RemoveUI(playerId, "selected_block.secondary_color")
-    tm.playerUI.RemoveUI(playerId, "selected_block.name")
-    tm.playerUI.RemoveUI(playerId, "newline")
-    tm.playerUI.RemoveUI(playerId, "total_weight")
-    tm.playerUI.RemoveUI(playerId, "total_buoyancy")
-    for i = 0,player_data[playerId].banned_blocks_ui_size do
-        tm.playerUI.RemoveUI(playerId, "error.banned_blocks-".. i)
+    if player_data[playerId].banned_blocks_ui_visible == true then
+        for i = 0,player_data[playerId].banned_blocks_ui_size do
+            tm.playerUI.RemoveUI(playerId, "error.banned_blocks-".. i)
+        end
+        tm.playerUI.RemoveUI(playerId, "error.banned_blocks")
+        player_data[playerId].banned_blocks_ui_visible = false
+    end
+    if player_data[playerId].too_many_engines_ui_visible == true then
+        tm.playerUI.RemoveUI(playerId, "error.too_many_engines")
+        player_data[playerId].too_many_engines_ui_visible = false
+    end
+    if player_data[playerId].selected_block_ui_visible == true then
+        tm.playerUI.RemoveUI(playerId, "selected_block.engine_power")
+        tm.playerUI.RemoveUI(playerId, "selected_block.buoyancy")
+        tm.playerUI.RemoveUI(playerId, "selected_block.mass")
+        tm.playerUI.RemoveUI(playerId, "selected_block.secondary_color")
+        tm.playerUI.RemoveUI(playerId, "selected_block.name")
+        tm.playerUI.RemoveUI(playerId, "newline")
+        player_data[playerId].selected_block_ui_visible = false
+    end
+    if player_data[playerId].ui_visible == true then
+        tm.playerUI.RemoveUI(playerId, "total_weight")
+        tm.playerUI.RemoveUI(playerId, "total_buoyancy")
+        player_data[playerId].ui_visible = false
     end
 end
 
 function UpdateUI(playerId)
     local profiling_ui_start_time = tm.os.GetRealtimeSinceStartup()
+
+    -- If they're not in build mode, remove the ui and end the function
     if not tm.players.GetPlayerIsInBuildMode(playerId) then
-        ClearUIWindow(playerId)
-        player_data[playerId].ui_visible = false
+        -- Don't do what i just did for the conditions in the following if check. It's really dumb and the line is so long
+        if player_data[playerId].ui_visible==true or player_data[playerId].selected_block_ui_visible == true or player_data[playerId].too_many_engines_ui_visible == true or player_data[playerId].banned_blocks_ui_visible == true then
+            ClearUIWindow(playerId)
+        end
         return
     end
 
-    tm.playerUI.RemoveUI(playerId, "error.banned_blocks")
-    for i = 0,player_data[playerId].banned_blocks_ui_size do
-        tm.playerUI.RemoveUI(playerId, "error.banned_blocks-".. i)
+    -- If they're in build mode, do all of the below
+
+    -- Banned blocks error ui
+    if player_data[playerId].banned_blocks_ui_visible==true then -- Remove banned blocks ui if it actually exists
+        player_data[playerId].banned_blocks_ui_visible = false
+        tm.playerUI.RemoveUI(playerId, "error.banned_blocks")
+        for i = 0,player_data[playerId].banned_blocks_ui_size do
+            tm.playerUI.RemoveUI(playerId, "error.banned_blocks-".. i)
+        end
     end
-    tm.playerUI.RemoveUI(playerId, "error.too_many_engines")
-    if player_data[playerId].has_banned_blocks==true then
+    if player_data[playerId].has_banned_blocks==true then -- If they have banned blocks, generate ui
         tm.playerUI.AddUILabel(playerId, "error.banned_blocks", "<b><color=#E22>Your kart has banned blocks!</color></b>")
         player_data[playerId].banned_blocks_ui_size = 0
         for i,_ in ipairs(player_data[playerId].banned_blocks) do
@@ -444,15 +467,23 @@ function UpdateUI(playerId)
             player_data[playerId].banned_blocks_ui_size = player_data[playerId].banned_blocks_ui_size + 1
         end
         tm.audio.PlayAudioAtGameobject("Build_rotate_weapon", tm.players.GetPlayerGameObject(playerId))
+        player_data[playerId].banned_blocks_ui_visible = true
         return
     end
-    if player_data[playerId].total_engines>1 then
+
+    -- Too many engines error ui
+    if player_data[playerId].too_many_engines_ui_visible==true then -- Check if too many engines ui actually exists
+        tm.playerUI.RemoveUI(playerId, "error.too_many_engines")
+        player_data[playerId].too_many_engines_ui_visible = false
+    end
+    if player_data[playerId].total_engines>1 then -- If the player has more than one engine, display the "too many engines" error
         tm.playerUI.AddUILabel(playerId, "error.too_many_engines", "<b><color=#E22>You can only have one engine!</color></b>")
         tm.audio.PlayAudioAtGameobject("Build_rotate_weapon", tm.players.GetPlayerGameObject(playerId))
+        player_data[playerId].too_many_engines_ui_visible = true
         return
     end
 
-
+    -- Build mode ui
     if player_data[playerId].ui_visible == true then
         if player_data[playerId].has_banned_blocks==false then
             if player_data[playerId].total_engines<2 then
@@ -500,21 +531,24 @@ function UpdateUI(playerId)
                         player_data[playerId].selected_block_ui_visible = true
                     end
                 else
+                    if player_data[playerId].selected_block_ui_visible==true then
+                        tm.playerUI.RemoveUI(playerId, "newline")
+                        tm.playerUI.RemoveUI(playerId, "selected_block.name")
+                        tm.playerUI.RemoveUI(playerId, "selected_block.mass")
+                        tm.playerUI.RemoveUI(playerId, "selected_block.buoyancy")
+                        tm.playerUI.RemoveUI(playerId, "selected_block.secondary_color")
+                        tm.playerUI.RemoveUI(playerId, "selected_block.engine_power")
+                    end
                     player_data[playerId].selected_block_ui_visible = false
-                    tm.playerUI.RemoveUI(playerId, "newline")
-                    tm.playerUI.RemoveUI(playerId, "selected_block.name")
-                    tm.playerUI.RemoveUI(playerId, "selected_block.mass")
-                    tm.playerUI.RemoveUI(playerId, "selected_block.buoyancy")
-                    tm.playerUI.RemoveUI(playerId, "selected_block.secondary_color")
-                    tm.playerUI.RemoveUI(playerId, "selected_block.engine_power")
                 end
             end
         end
     else
-        player_data[playerId].ui_visible = true
         tm.playerUI.AddUILabel(playerId, "total_buoyancy", string.format("%.1f", player_data[playerId].total_buoyancy).. "kg total vehicle buoyancy")
         tm.playerUI.AddUILabel(playerId, "total_weight", string.format("%.1f", player_data[playerId].total_weight).. "kg total vehicle weight") -- Inaccurate vehicle weight isn't a bug; steering hinge has a misleading in-game weight value   
+        player_data[playerId].ui_visible = true
     end
+    
     if profiling==1 then
         local endtime = tm.os.GetRealtimeSinceStartup()
         profiling_ui_time = profiling_ui_time + endtime-profiling_ui_start_time
