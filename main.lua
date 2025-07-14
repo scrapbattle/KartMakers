@@ -162,9 +162,9 @@ local block_types = {
 }
 
 local engine_power_list = { -- this holds the power value for each type of engine
-    {name="EngineBasic",    cc=150*global_engine_power_multiplier}, -- Bulldawg Engine
-    {name="EngineNinja",    cc=100*global_engine_power_multiplier}, -- Dragon Engine
-    {name="EngineOlSchool", cc=125*global_engine_power_multiplier}, -- Raw Engine
+    {name="EngineBasic",    cc=150*global_engine_power_multiplier, weight=3}, -- Bulldawg Engine
+    {name="EngineNinja",    cc=100*global_engine_power_multiplier, weight=5}, -- Dragon Engine
+    {name="EngineOlSchool", cc=125*global_engine_power_multiplier, weight=7}, -- Raw Engine
 }
 
 --tm.playerUI.AddSubtleMessageForAllPlayers("KartMakers", "Subtle message icon test", 10, "icon")
@@ -286,7 +286,7 @@ function CheckStructures(playerId)
                 if player_data[playerId].engines[i].block.Exists() then
                     local block = player_data[playerId].engines[i].block
                     local power = 0
-                    if player_data[playerId].wheels>=4 and player_data[playerId].wheels<=6 then
+                    if player_data[playerId].wheels>2 and player_data[playerId].wheels<=6 then
                         for j,_ in ipairs(engine_power_list) do
                             if string.sub(block.GetName(), 5, -10) == engine_power_list[j].name then
                                 power = engine_power_list[j].cc*22.22
@@ -366,16 +366,14 @@ function CheckStructures(playerId)
                     local block = player_data[playerId].engines[i].block
                     block.SetEnginePower(0) -- Set to zero so if there's an invalid kart setup it remains as zero
                     if #player_data[playerId].banned_blocks==0 then
-                        if player_data[playerId].total_engines==0 and player_data[playerId].wheels>=4 and player_data[playerId].wheels<=6 then
-                            for j,_ in ipairs(engine_power_list) do
-                                if string.sub(block.GetName(), 5, -10) == engine_power_list[j].name then
-                                    block.SetEnginePower(engine_power_list[j].cc*22.22)
-                                    player_data[playerId].engines[#player_data[playerId].engines].power = block.GetEnginePower()
-                                    player_data[playerId].selected_engine_cc = engine_power_list[j].cc
-
-                                    tm.os.Log("Found engine match! Engine power is now ".. block.GetEnginePower())
-                                    break
-                                end
+                        for j,_ in ipairs(engine_power_list) do
+                            if string.sub(block.GetName(), 5, -10) == engine_power_list[j].name then
+                                block.SetEnginePower(engine_power_list[j].cc*22.22)
+                                block.SetMass(engine_power_list[j].weight)
+                                player_data[playerId].engines[#player_data[playerId].engines].power = block.GetEnginePower()
+                                player_data[playerId].selected_engine_cc = engine_power_list[j].cc
+                                --tm.os.Log("Found engine match! Engine power is now ".. block.GetEnginePower())
+                                break
                             end
                         end
                     else
@@ -387,7 +385,7 @@ function CheckStructures(playerId)
                         end
                     end
                 end
-                for _,_ in pairs(player_data[playerId].banned_blocks) do
+                if player_data[playerId].has_banned_blocks == true or player_data[playerId].wheels<3 or player_data[playerId].wheels>6 then
                     for _,block in ipairs(blocks) do
                         local value = block_types[string.sub(block.GetName(), 5, -10)]
                         if value == "engine" then
@@ -441,7 +439,7 @@ function UpdateUI(playerId)
     -- If they're not in build mode, remove the ui and end the function
     if not tm.players.GetPlayerIsInBuildMode(playerId) then
         -- Don't do what i just did for the conditions in the following if check. It's really dumb and the line is so long
-        if player_data[playerId].ui_visible==true or player_data[playerId].selected_block_ui_visible == true or player_data[playerId].too_many_engines_ui_visible == true or player_data[playerId].banned_blocks_ui_visible == true then
+        if player_data[playerId].ui_visible==true or player_data[playerId].selected_block_ui_visible == true or player_data[playerId].too_many_engines_ui_visible == true or player_data[playerId].banned_blocks_ui_visible == true or player_data[playerId].wheels_error_ui_visible == true then
             ClearUIWindow(playerId)
         end
         return
@@ -464,8 +462,8 @@ function UpdateUI(playerId)
             tm.playerUI.AddUILabel(playerId, "error.banned_blocks-".. i, "<i>".. player_data[playerId].banned_blocks[i].. "</i>")
             player_data[playerId].banned_blocks_ui_size = player_data[playerId].banned_blocks_ui_size + 1
         end
-        tm.audio.PlayAudioAtGameobject("Build_rotate_weapon", tm.players.GetPlayerGameObject(playerId))
         player_data[playerId].banned_blocks_ui_visible = true
+        tm.audio.PlayAudioAtGameobject("Build_rotate_weapon", tm.players.GetPlayerGameObject(playerId))
         return
     end
 
@@ -476,8 +474,8 @@ function UpdateUI(playerId)
     end
     if player_data[playerId].total_engines>1 then -- If the player has more than one engine, display the "too many engines" error
         tm.playerUI.AddUILabel(playerId, "error.too_many_engines", "<b><color=#E22>You can only have one engine!</color></b>")
-        tm.audio.PlayAudioAtGameobject("Build_rotate_weapon", tm.players.GetPlayerGameObject(playerId))
         player_data[playerId].too_many_engines_ui_visible = true
+        tm.audio.PlayAudioAtGameobject("Build_rotate_weapon", tm.players.GetPlayerGameObject(playerId))
         return
     end
 
@@ -486,11 +484,14 @@ function UpdateUI(playerId)
         tm.playerUI.RemoveUI(playerId, "error.wheels_error")
         player_data[playerId].wheels_error_ui_visible = false
     end
-    if player_data[playerId].wheels<3 or player_data[playerId].wheels>6 then -- If the player doesn't have 3-6 wheels, display the "wheels error" error
-        tm.playerUI.AddUILabel(playerId, "error.wheels_error", "<b><color=#E22>You must have 3-6 wheels!</color></b>")
-        tm.audio.PlayAudioAtGameobject("Build_rotate_weapon", tm.players.GetPlayerGameObject(playerId))
-        player_data[playerId].wheels_error_ui_visible = true
-        return
+    if player_data[playerId].wheels>0 then
+        if player_data[playerId].wheels<3 or player_data[playerId].wheels>6 then -- If the player doesn't have 3-6 wheels, display the "wheels error" error
+            tm.playerUI.AddUILabel(playerId, "error.wheels_error", "<b><color=#E22>You must have 3-6 wheels!</color></b>")
+            player_data[playerId].wheels_error_ui_visible = true
+            -- UI_General_Toggle_Click
+            tm.audio.PlayAudioAtGameobject("UI_General_Toggle_Click", tm.players.GetPlayerGameObject(playerId))
+            return
+        end
     end
 
     -- Build mode ui
