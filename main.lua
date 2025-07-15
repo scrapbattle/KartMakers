@@ -283,26 +283,39 @@ function CheckStructures(playerId)
         end
         if player_data[playerId].has_banned_blocks==false and #player_data[playerId].engines<2 then
             for i,_ in ipairs(player_data[playerId].engines) do
+                --tm.os.Log("Checking engine #".. i)
                 if player_data[playerId].engines[i].block.Exists() then
                     local block = player_data[playerId].engines[i].block
                     local power = 0
+                    --tm.os.Log("  Engine exists, calculating power...")
                     if player_data[playerId].wheels>2 and player_data[playerId].wheels<=6 then
+                        --tm.os.Log("    Wheel check passed")
                         for j,_ in ipairs(engine_power_list) do
+                            --tm.os.Log("      Checking engine type #".. j)
                             if string.sub(block.GetName(), 5, -10) == engine_power_list[j].name then
                                 power = engine_power_list[j].cc*22.22
                                 player_data[playerId].selected_engine_cc = engine_power_list[j].cc
+                                --tm.os.Log(        "Engine is type #".. j.. " | Calculated power is now ".. power)
                                 break
                             end
                         end
+                    else
+                        --tm.os.Log("    Wheel check failed")
                     end
                     if block.GetEnginePower() ~= power then
+                        tm.os.Log("  Engine power was updated. Current power: ".. block.GetEnginePower().. " | Calculated power: ".. power)
                         if profiling>0 then
                             tm.os.Log(tm.players.GetPlayerName(playerId).. " (".. playerId.. ")'s engine power is out of sync, updating...")
                         end
                         tm.audio.PlayAudioAtGameobject("Build_attach_Weapon", tm.players.GetPlayerGameObject(playerId))
                         block.SetEnginePower(power)
                         player_data[playerId].engines[#player_data[playerId].engines].power = block.GetEnginePower()
+                    else
+                        --tm.os.Log("  Engine power is identical. Current power: ".. block.GetEnginePower().. " | Calculated power: ".. power)
                     end
+                else
+                    tm.os.Log("  Engine does not exist, forcing cache refresh...")
+                    player_data[playerId].block_count = -1
                 end
             end
         end
@@ -331,12 +344,24 @@ function CheckStructures(playerId)
                     player_data[playerId].total_buoyancy = player_data[playerId].total_buoyancy + block.GetBuoyancy()*5
                     player_data[playerId].total_weight = player_data[playerId].total_weight + block.GetMass()*5
 
+                    if value == "2x2x1" then -- gokart wheel
+                        block.SetBuoyancy(4) -- multiply buoyancy by 5 to convert to kg
+                        player_data[playerId].wheels = player_data[playerId].wheels + 1
+                    end
                     if value == "3x3x1" then
-                        block.SetBuoyancy(9) -- multiply buoyancy by 5 to convert to kg
+                        block.SetBuoyancy(9)
                         player_data[playerId].wheels = player_data[playerId].wheels + 1
                     end
                     if value == "3x3x2" then
                         block.SetBuoyancy(9)
+                        player_data[playerId].wheels = player_data[playerId].wheels + 1
+                    end
+                    if value == "5x5x2" then -- truck wheel
+                        block.SetBuoyancy(12)
+                        player_data[playerId].wheels = player_data[playerId].wheels + 1
+                    end
+                    if value == "7x7x4" then -- monster truck wheel
+                        block.SetBuoyancy(20) -- multiply buoyancy by 5 to convert to kg
                         player_data[playerId].wheels = player_data[playerId].wheels + 1
                     end
                     if value == "4x1x1" then -- skis and pistons
