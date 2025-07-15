@@ -444,6 +444,10 @@ function CheckStructures(playerId)
                         block.SetMass(4.5)
                     end
 
+                    if block.IsPlayerSeatBlock() then
+                        block.SetDragAll(0.15, 0.5, 0.5, 0.5, 0.5, 0.5)
+                    end
+
                     if value == "banned" then
                         player_data[playerId].has_banned_blocks = true
                         table.insert(player_data[playerId].banned_blocks, string.sub(block.GetName(), 5, -10))
