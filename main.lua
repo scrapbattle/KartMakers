@@ -117,6 +117,11 @@ local block_types = {
     InertialRedirector = "quantum_rudder",
     HingeLarge = "large_hinge",
 
+    -- thruster tiers
+    JetEngineMini =  "t1_thruster", -- Thruster
+    SpaceThruster =  "t2_thruster", -- Space Thruster
+    JetEngineNinja = "t3_thruster", -- Dragon Jet
+
     -- Banned blocks
     -- Banned blocks: Traction
     AnchorBlock = "banned",
@@ -133,6 +138,7 @@ local block_types = {
     UnderWaterPropeller = "banned",
     BulldawgBoatEngineBlock = "banned",
     -- Banned blocks: Thrusters
+    JetTiny = "banned",
     JetEngineLarge = "banned",
     JetGimbal = "banned",
     JetEngine = "banned",
@@ -424,6 +430,18 @@ function CheckStructures(playerId)
                     end
                     if value == "large_hinge" then
                         block.SetMass(0.4)
+                    end
+
+                    if value == "t1_thruster" then
+                        block.SetMass(1.5)
+                        block.SetJetPower(125)
+                    end
+                    if value == "t2_thruster" then
+                        block.SetMass(2.5)
+                        block.SetJetPower(200)
+                    end
+                    if value == "t3_thruster" then
+                        block.SetMass(4.5)
                     end
 
                     if value == "banned" then
