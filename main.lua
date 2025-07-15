@@ -500,8 +500,8 @@ function CheckStructures(playerId)
 end
 
 function AddBuildModeSubtleMessages(playerId)
-    player_data[playerId].build_mode_subtle_message_data[1].message = tm.playerUI.AddSubtleMessageForPlayer(playerId, "KartMakers", "Your kart is ".. tostring(player_data[playerId].selected_engine_cc).. "cc", 32767, "km_engine")
-    player_data[playerId].build_mode_subtle_message_data[2].message = tm.playerUI.AddSubtleMessageForPlayer(playerId, "KartMakers", "Your kart has ".. tostring(player_data[playerId].total_thrust).. "/".. max_thruster_power.. " power", 32767, "km_thrust")
+    player_data[playerId].build_mode_subtle_message_data[1].message = tm.playerUI.AddSubtleMessageForPlayer(playerId, "", "Your kart is ".. tostring(player_data[playerId].selected_engine_cc).. "cc", 32767, "km_engine")
+    player_data[playerId].build_mode_subtle_message_data[2].message = tm.playerUI.AddSubtleMessageForPlayer(playerId, "", "Your kart has ".. tostring(player_data[playerId].total_thrust).. "/".. max_thruster_power.. " thrust", 32767, "km_thrust")
     player_data[playerId].build_mode_subtle_message_data.visible = true
 end
 
