@@ -2,6 +2,8 @@ tm.os.Log("KartMakers by HormaV5 (Project lead), RainlessSky (Programmer), Antim
 tm.os.Log("")
 
 tm.physics.AddTexture("KartOutline.png", "icon")
+tm.physics.AddTexture("engine.png", "km_engine")
+tm.physics.AddTexture("thrust.png", "km_thrust")
 
 tm.os.SetModTargetDeltaTime(1/60)
 
@@ -19,12 +21,14 @@ local magnet_fling = false -- Toggle Magnet Fling on/off
 local magnet_fling_duration = 1.5 -- How long the magnet fling lasts for (seconds) | Default: 1.5
 local magnet_fling_strength = 2 -- Strength for magnet fling | Default: 2
 local global_engine_power_multiplier = 1 -- Multiplier for engine CC/Power
+local max_thruster_power = 300 -- Max thrust per kart
 
 player_data = {}
 function OnPlayerJoined(player)
     player_data[player.playerId] = {
         total_buoyancy = 0,
         total_weight = 0,
+        total_thrust = 0,
         block_count = 0,
         has_banned_blocks = false,
         banned_blocks = {},
@@ -34,11 +38,19 @@ function OnPlayerJoined(player)
         engines = {},
         HasGroundContact = true,
         magnet_duration = 0,
+
         ui_visible = false,
         banned_blocks_ui_size = 0,
         banned_blocks_ui_visible = false,
         too_many_engines_ui_visible = false,
-        wheels_error_ui_visible = false
+        wheels_error_ui_visible = false,
+        thrust_error_ui_visible = false,
+
+        build_mode_subtle_message_data = {
+            visible=false,
+            {id="engine_cc_message", message=nil},
+            {id="thruster_power_message", message=nil}
+        }
     }
 end
 tm.players.OnPlayerJoined.add(OnPlayerJoined)
@@ -62,19 +74,19 @@ local block_types = {
     -- Hinge having less drag is debatable because it honestly doesnt matter that much
     SmallHinge = "decoration",
 
-    ModularTubeSystem_TubeDoubleElbow = "decoration",
-    ModularTubeSystem_Skewed1x1x2 = "decoration",
-    ModularTubeSystem_Tube1x1x8 = "decoration",
-    ModularTubeSystem_Skewed2x1x2 = "decoration",
-    ModularTubeSystem_TubeTeeCross = "decoration",
-    ModularTubeSystem_DoubleCross = "decoration",
-    ModularTubeSystem_Tube3x1 = "decoration",
-    ModularTubeSystem_TubeDoubleTee = "decoration",
-    ModularTubeSystem_Tube1x4 = "decoration",
-    ModularTubeSystem_TubeTee = "decoration",
-    ModularTubeSystem_Tube1x1 = "decoration",
-    ModularTubeSystem_TubeElbow = "decoration",
-    ModularTubeSystem_TubeCross = "decoration",
+    ModularTubeSystem_TubeDoubleElbow = "tubes_3", -- 3 nubs
+    ModularTubeSystem_Skewed1x1x2 = "tubes_2", -- 2 nubs
+    ModularTubeSystem_Tube1x1x8 = "tubes_2", -- 2 nubs
+    ModularTubeSystem_Skewed2x1x2 = "tubes_2", -- 2 nubs
+    ModularTubeSystem_TubeTeeCross = "tubes_5", -- 5 nubs
+    ModularTubeSystem_DoubleCross = "tubes_6", -- 6 nubs
+    ModularTubeSystem_Tube3x1 = "tubes_2", -- 2 nubs
+    ModularTubeSystem_TubeDoubleTee = "tubes_4", -- 4 nubs
+    ModularTubeSystem_Tube1x4 = "tubes_2", -- 2 nubs
+    ModularTubeSystem_TubeTee = "tubes_3", -- 3 nubs
+    ModularTubeSystem_Tube1x1 = "tubes_2", -- 2 nubs
+    ModularTubeSystem_TubeElbow = "tubes_2", -- 2 nubs
+    ModularTubeSystem_TubeCross = "tubes_2", -- 4 nubs
     LightFront = "decoration",
     LightFrontLarge = "decoration",
     LightFront_V2 = "decoration",
@@ -98,6 +110,12 @@ local block_types = {
     EngineBasic = "engine",
     EngineOlSchool = "engine",
     EngineNinja = "engine",
+
+    -- gyro changes
+    GyroStabilizer = "gyro_stabilizer",
+    AngleSensorBlock = "angle_sensor",
+    InertialRedirector = "quantum_rudder",
+    HingeLarge = "large_hinge",
 
     -- Banned blocks
     -- Banned blocks: Traction
@@ -161,7 +179,7 @@ local block_types = {
     Dispenser_SeaMine = "banned"
 }
 
-local engine_power_list = { -- this holds the power value for each type of engine
+local engine_power_list = { -- this holds the power value and custom weight for each engine type
     {name="EngineBasic",    cc=150*global_engine_power_multiplier, weight=3}, -- Bulldawg Engine
     {name="EngineNinja",    cc=100*global_engine_power_multiplier, weight=5}, -- Dragon Engine
     {name="EngineOlSchool", cc=125*global_engine_power_multiplier, weight=7}, -- Raw Engine
@@ -281,7 +299,7 @@ function CheckStructures(playerId)
         for _,structure in ipairs(structures) do
             live_block_count = live_block_count + #structure.GetBlocks()
         end
-        if player_data[playerId].has_banned_blocks==false and #player_data[playerId].engines<2 then
+        if player_data[playerId].has_banned_blocks==false and #player_data[playerId].engines<2 and player_data[playerId].total_thrust<=300 then
             for i,_ in ipairs(player_data[playerId].engines) do
                 --tm.os.Log("Checking engine #".. i)
                 if player_data[playerId].engines[i].block.Exists() then
@@ -325,10 +343,12 @@ function CheckStructures(playerId)
                 --tm.os.Log("Build has ".. live_block_count.. " blocks right now")
                 --tm.os.Log("Build had ".. player_data[playerId].block_count.. " blocks")
             end
+
             player_data[playerId].block_count = live_block_count
             tm.audio.PlayAudioAtGameobject("Build_attach_Flag", tm.players.GetPlayerGameObject(playerId))
             player_data[playerId].total_buoyancy = 0
             player_data[playerId].total_weight = 0
+            player_data[playerId].total_thrust = 0
             player_data[playerId].has_banned_blocks = false
             player_data[playerId].banned_blocks = {}
             player_data[playerId].total_engines = 0
@@ -339,10 +359,6 @@ function CheckStructures(playerId)
                 local blocks = structure.GetBlocks()
                 for i,block in pairs(blocks) do
                     local value = block_types[string.sub(block.GetName(), 5, -10)]
-
-                    -- multiply mass by 5 to convert to kg
-                    player_data[playerId].total_buoyancy = player_data[playerId].total_buoyancy + block.GetBuoyancy()*5
-                    player_data[playerId].total_weight = player_data[playerId].total_weight + block.GetMass()*5
 
                     if value == "2x2x1" then -- gokart wheel
                         block.SetBuoyancy(4) -- multiply buoyancy by 5 to convert to kg
@@ -371,8 +387,23 @@ function CheckStructures(playerId)
                     if value == "seat" then
                         block.SetDragAll(0.1, 0.1, 0.1, 0.1, 0.1, 0.1)
                     end
-                    if value == "decoration" then -- pipes, lights, steering hinge, camera block
+                    if value == "decoration" then -- lights, steering hinge, camera block
                         block.SetDragAll(0.1, 0.1, 0.1, 0.1, 0.1, 0.1)
+                    end
+                    if value == "tubes_2" then -- 0.2 per nub
+                        block.SetDragAll(0.4, 0.4, 0.4, 0.4, 0.4, 0.4)
+                    end
+                    if value == "tubes_3" then
+                        block.SetDragAll(0.6, 0.6, 0.6, 0.6, 0.6, 0.6)
+                    end
+                    if value == "tubes_4" then
+                        block.SetDragAll(0.8, 0.8, 0.8, 0.8, 0.8, 0.8)
+                    end
+                    if value == "tubes_5" then
+                        block.SetDragAll(1, 1, 1, 1, 1, 1)
+                    end
+                    if value == "tubes_6" then
+                        block.SetDragAll(1, 1, 1, 1, 1, 1)
                     end
 
                     if value == "engine" then
@@ -382,10 +413,31 @@ function CheckStructures(playerId)
                         player_data[playerId].engines[#player_data[playerId].engines].power = block.GetEnginePower()
                     end
 
+                    if value == "gyro_stabilizer" then
+                        block.SetMass(2)
+                    end
+                    if value == "angle_sensor" then
+                        block.SetMass(0.2)
+                    end
+                    if value == "quantum_rudder" then
+                        block.SetMass(1.6)
+                    end
+                    if value == "large_hinge" then
+                        block.SetMass(0.4)
+                    end
+
                     if value == "banned" then
                         player_data[playerId].has_banned_blocks = true
                         table.insert(player_data[playerId].banned_blocks, string.sub(block.GetName(), 5, -10))
                     end
+
+                    if block.IsJetBlock() then
+                        player_data[playerId].total_thrust = player_data[playerId].total_thrust + block.GetJetPower()
+                    end
+
+                    -- multiply mass by 5 to convert to kg
+                    player_data[playerId].total_buoyancy = player_data[playerId].total_buoyancy + block.GetBuoyancy()*5
+                    player_data[playerId].total_weight = player_data[playerId].total_weight + block.GetMass()*5
                 end
                 for i,_ in ipairs(player_data[playerId].engines) do
                     local block = player_data[playerId].engines[i].block
@@ -410,7 +462,7 @@ function CheckStructures(playerId)
                         end
                     end
                 end
-                if player_data[playerId].has_banned_blocks == true or player_data[playerId].wheels<3 or player_data[playerId].wheels>6 then
+                if player_data[playerId].has_banned_blocks == true or player_data[playerId].wheels<3 or player_data[playerId].wheels>6 or player_data[playerId].total_thrust>max_thruster_power then
                     for _,block in ipairs(blocks) do
                         local value = block_types[string.sub(block.GetName(), 5, -10)]
                         if value == "engine" then
@@ -419,11 +471,34 @@ function CheckStructures(playerId)
                     end
                 end
             end
+            if player_data[playerId].build_mode_subtle_message_data.visible==true then
+                UpdateBuildModeSubtleMessages(playerId)
+            end
         end
         if profiling==1 then
             profiling_structure_checking_time = profiling_structure_checking_time + tm.os.GetRealtimeSinceStartup()-profiling_structure_checking_start_time
         end
     end
+end
+
+function AddBuildModeSubtleMessages(playerId)
+    player_data[playerId].build_mode_subtle_message_data[1].message = tm.playerUI.AddSubtleMessageForPlayer(playerId, "KartMakers", "Your kart is ".. tostring(player_data[playerId].selected_engine_cc).. "cc", 32767, "km_engine")
+    player_data[playerId].build_mode_subtle_message_data[2].message = tm.playerUI.AddSubtleMessageForPlayer(playerId, "KartMakers", "Your kart has ".. tostring(player_data[playerId].total_thrust).. "/".. max_thruster_power.. " power", 32767, "km_thrust")
+    player_data[playerId].build_mode_subtle_message_data.visible = true
+end
+
+function UpdateBuildModeSubtleMessages(playerId)
+    tm.playerUI.SubtleMessageUpdateMessageForPlayer(playerId, player_data[playerId].build_mode_subtle_message_data[1].message, "Your kart is ".. tostring(player_data[playerId].selected_engine_cc).. "cc")
+     tm.playerUI.SubtleMessageUpdateMessageForPlayer(playerId, player_data[playerId].build_mode_subtle_message_data[2].message, "Your kart has ".. tostring(player_data[playerId].total_thrust).. "/".. max_thruster_power.. " power")
+end
+
+
+function ClearBuildModeSubtleMessages(playerId)
+    tm.playerUI.RemoveSubtleMessageForPlayer(playerId, player_data[playerId].build_mode_subtle_message_data[1].message)
+    tm.playerUI.RemoveSubtleMessageForPlayer(playerId, player_data[playerId].build_mode_subtle_message_data[2].message)
+    player_data[playerId].build_mode_subtle_message_data[1].message = nil
+    player_data[playerId].build_mode_subtle_message_data[2].message = nil
+    player_data[playerId].build_mode_subtle_message_data.visible = false
 end
 
 function ClearUIWindow(playerId)
@@ -441,6 +516,10 @@ function ClearUIWindow(playerId)
     if player_data[playerId].wheels_error_ui_visible == true then
         tm.playerUI.RemoveUI(playerId, "error.wheels_error")
         player_data[playerId].wheels_error_ui_visible = false
+    end
+    if player_data[playerId].thrust_error_ui_visible == true then
+        tm.playerUI.RemoveUI(playerId, "error.thrust_error")
+        player_data[playerId].thrust_error_ui_visible = false
     end
     if player_data[playerId].selected_block_ui_visible == true then
         tm.playerUI.RemoveUI(playerId, "selected_block.engine_power")
@@ -464,10 +543,15 @@ function UpdateUI(playerId)
     -- If they're not in build mode, remove the ui and end the function
     if not tm.players.GetPlayerIsInBuildMode(playerId) then
         -- Don't do what i just did for the conditions in the following if check. It's really dumb and the line is so long
-        if player_data[playerId].ui_visible==true or player_data[playerId].selected_block_ui_visible == true or player_data[playerId].too_many_engines_ui_visible == true or player_data[playerId].banned_blocks_ui_visible == true or player_data[playerId].wheels_error_ui_visible == true then
+        if player_data[playerId].ui_visible==true or player_data[playerId].selected_block_ui_visible == true or player_data[playerId].too_many_engines_ui_visible == true or player_data[playerId].banned_blocks_ui_visible == true or player_data[playerId].wheels_error_ui_visible == true or player_data[playerId].thrust_error_ui_visible == true then
             ClearUIWindow(playerId)
+            ClearBuildModeSubtleMessages(playerId)
         end
         return
+    end
+
+    if player_data[playerId].build_mode_subtle_message_data.visible==false then
+        AddBuildModeSubtleMessages(playerId)
     end
 
     -- If they're in build mode, do all of the below
@@ -488,7 +572,7 @@ function UpdateUI(playerId)
             player_data[playerId].banned_blocks_ui_size = player_data[playerId].banned_blocks_ui_size + 1
         end
         player_data[playerId].banned_blocks_ui_visible = true
-        tm.audio.PlayAudioAtGameobject("Build_rotate_weapon", tm.players.GetPlayerGameObject(playerId))
+        tm.audio.PlayAudioAtGameobject("UI_General_Toggle_Click", tm.players.GetPlayerGameObject(playerId))
         return
     end
 
@@ -500,7 +584,7 @@ function UpdateUI(playerId)
     if player_data[playerId].total_engines>1 then -- If the player has more than one engine, display the "too many engines" error
         tm.playerUI.AddUILabel(playerId, "error.too_many_engines", "<b><color=#E22>You can only have one engine!</color></b>")
         player_data[playerId].too_many_engines_ui_visible = true
-        tm.audio.PlayAudioAtGameobject("Build_rotate_weapon", tm.players.GetPlayerGameObject(playerId))
+        tm.audio.PlayAudioAtGameobject("UI_General_Toggle_Click", tm.players.GetPlayerGameObject(playerId))
         return
     end
 
@@ -517,6 +601,19 @@ function UpdateUI(playerId)
             tm.audio.PlayAudioAtGameobject("UI_General_Toggle_Click", tm.players.GetPlayerGameObject(playerId))
             return
         end
+    end
+
+    -- Too much thrust error ui
+    if player_data[playerId].thrust_error_ui_visible==true then -- Check if too many engines ui actually exists
+        tm.playerUI.RemoveUI(playerId, "error.thrust_error")
+        player_data[playerId].thrust_error_ui_visible = false
+    end
+    if player_data[playerId].total_thrust>max_thruster_power then
+        tm.playerUI.AddUILabel(playerId, "error.thrust_error", "<b><color=#E22>You cannot have >".. max_thruster_power.. " thrust!</color></b>")
+        player_data[playerId].thrust_error_ui_visible = true
+        -- UI_General_Toggle_Click
+        tm.audio.PlayAudioAtGameobject("UI_General_Toggle_Click", tm.players.GetPlayerGameObject(playerId))
+        return
     end
 
     -- Build mode ui
