@@ -21,7 +21,7 @@ Magnet_Fling_Duration = 1.5 -- How long the magnet fling lasts for (seconds) | D
 Magnet_Fling_Strength = 2 -- Strength for magnet fling | Default: 2
 Global_Engine_Power_Multiplier = 1 -- Multiplier for engine CC/Power
 Max_Thruster_Power = 300 -- Max thrust per kart
-Minimum_Wheels = 3
+Minimum_Wheels = 2
 
 Player_Data = {}
 function OnPlayerJoined(player)
@@ -121,6 +121,9 @@ Block_Types = {
     JetEngineMini =  "t1_thruster", -- Thruster
     SpaceThruster =  "t2_thruster", -- Space Thruster
     JetEngineNinja = "t3_thruster", -- Dragon Jet
+
+    -- anti-drag nerfs
+    BracketBlock = "l_bracket",
 
     -- Banned blocks
     -- Banned blocks: Traction

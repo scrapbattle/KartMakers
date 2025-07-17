@@ -136,6 +136,9 @@ KartMakers.CheckStructures.Execute = function(playerId)
                     if value == "large_hinge" then
                         block.SetMass(0.4)
                     end
+                    if value == "l_bracket" then
+                        block.SetMass(0.6)
+                    end
 
                     if value == "t1_thruster" then
                         block.SetMass(1.5)
