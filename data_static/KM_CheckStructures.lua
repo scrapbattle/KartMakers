@@ -71,57 +71,28 @@ KartMakers.CheckStructures.Execute = function(playerId)
                 for i,block in pairs(blocks) do
                     local value = Block_Types[string.sub(block.GetName(), 5, -10)]
 
-                    if value == "2x2x1" then -- gokart wheel
-                        block.SetBuoyancy(4) -- multiply buoyancy by 5 to convert to kg
+                    if value == "wheel" then
                         Player_Data[playerId].wheels = Player_Data[playerId].wheels + 1
                     end
-                    if value == "3x3x1" then
-                        block.SetBuoyancy(9)
-                        Player_Data[playerId].wheels = Player_Data[playerId].wheels + 1
+                    if value~=nil and string.find(value, "drag_")~=nil then -- ski, piston, small hinge, lights, camera
+                        local num = math.min(string.sub(value, (string.find(value, "_")+1), -1)/100, 1.0)
+                        block.SetDragAll(num, num, num, num, num, num)
                     end
-                    if value == "3x3x2" then
-                        block.SetBuoyancy(9)
-                        Player_Data[playerId].wheels = Player_Data[playerId].wheels + 1
+                    if value~=nil and string.find(value, "tubes_")~=nil then -- 20% drag per nub, 0.1kg per nub
+                        local n = math.min(string.sub(value, (string.find(value, "_")+1), -1)*0.2, 1.0)
+                        block.SetDragAll(n, n, n, n, n, n)
+                        block.SetMass(n/10)
                     end
-                    if value == "5x5x2" then -- truck wheel
-                        block.SetBuoyancy(12)
-                        Player_Data[playerId].wheels = Player_Data[playerId].wheels + 1
+                    if value == "grid_1x2" then
+                        block.SetMass(0.1)
                     end
-                    if value == "7x7x4" then -- monster truck wheel
-                        block.SetBuoyancy(20) -- multiply buoyancy by 5 to convert to kg
-                        Player_Data[playerId].wheels = Player_Data[playerId].wheels + 1
-                    end
-                    if value == "4x1x1" then -- skis and pistons
-                        block.SetBuoyancy(32)
-                        block.SetDragAll(0.1, 0.1, 0.1, 0.1, 0.1, 0.1) -- automatically anti-drag pistons and skis
-                    end
-                    if value == "seat" then
-                        block.SetDragAll(0.1, 0.1, 0.1, 0.1, 0.1, 0.1)
-                    end
-                    if value == "decoration" then -- lights, steering hinge, camera block
-                        block.SetDragAll(0.1, 0.1, 0.1, 0.1, 0.1, 0.1)
-                    end
-                    if value == "tubes_2" then -- 0.2 per nub
-                        block.SetDragAll(0.4, 0.4, 0.4, 0.4, 0.4, 0.4)
-                    end
-                    if value == "tubes_3" then
-                        block.SetDragAll(0.6, 0.6, 0.6, 0.6, 0.6, 0.6)
-                    end
-                    if value == "tubes_4" then
-                        block.SetDragAll(0.8, 0.8, 0.8, 0.8, 0.8, 0.8)
-                    end
-                    if value == "tubes_5" then
-                        block.SetDragAll(1, 1, 1, 1, 1, 1)
-                    end
-                    if value == "tubes_6" then
-                        block.SetDragAll(1, 1, 1, 1, 1, 1)
+                    if value == "grid_1x4" then
+                        block.SetMass(0.2)
                     end
 
                     if value == "engine" then
                         Player_Data[playerId].total_engines = Player_Data[playerId].total_engines + 1
-                        Player_Data[playerId].engines[#Player_Data[playerId].engines+1] = {block=nil,power=nil}
-                        Player_Data[playerId].engines[#Player_Data[playerId].engines].block = block
-                        Player_Data[playerId].engines[#Player_Data[playerId].engines].power = block.GetEnginePower()
+                        Player_Data[playerId].engines[#Player_Data[playerId].engines+1] = {block=block,power=block.GetEnginePower()}
                     end
 
                     if value == "gyro_stabilizer" then

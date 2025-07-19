@@ -2,6 +2,7 @@ local KartMakers = {
     UpdateUI = {}
 }
 
+local error_sound = "UI_General_Toggle_Click"
 KartMakers.UpdateUI.Execute = function(playerId)
     local Profiling_ui_start_time = tm.os.GetRealtimeSinceStartup()
 
@@ -37,7 +38,7 @@ KartMakers.UpdateUI.Execute = function(playerId)
             Player_Data[playerId].banned_blocks_ui_size = Player_Data[playerId].banned_blocks_ui_size + 1
         end
         Player_Data[playerId].banned_blocks_ui_visible = true
-        tm.audio.PlayAudioAtGameobject("UI_General_Toggle_Click", tm.players.GetPlayerGameObject(playerId))
+        tm.audio.PlayAudioAtGameobject(error_sound, tm.players.GetPlayerGameObject(playerId))
         return
     end
 
@@ -50,7 +51,7 @@ KartMakers.UpdateUI.Execute = function(playerId)
         tm.playerUI.AddUILabel(playerId, "error.too_many_engines", "<b><color=#E22>You can only have one engine!</color></b>")
         tm.playerUI.SubtleMessageUpdateMessageForPlayer(playerId, Player_Data[playerId].build_mode_subtle_message_data[1].message, "You can only have one engine!")
         Player_Data[playerId].too_many_engines_ui_visible = true
-        tm.audio.PlayAudioAtGameobject("UI_General_Toggle_Click", tm.players.GetPlayerGameObject(playerId))
+        tm.audio.PlayAudioAtGameobject(error_sound, tm.players.GetPlayerGameObject(playerId))
         return
     end
 
@@ -64,7 +65,7 @@ KartMakers.UpdateUI.Execute = function(playerId)
             tm.playerUI.AddUILabel(playerId, "error.wheels_error", "<b><color=#E22>You must have 3-6 wheels!</color></b>")
             Player_Data[playerId].wheels_error_ui_visible = true
             -- UI_General_Toggle_Click
-            tm.audio.PlayAudioAtGameobject("UI_General_Toggle_Click", tm.players.GetPlayerGameObject(playerId))
+            tm.audio.PlayAudioAtGameobject(error_sound, tm.players.GetPlayerGameObject(playerId))
             return
         end
     end
@@ -79,7 +80,7 @@ KartMakers.UpdateUI.Execute = function(playerId)
         tm.playerUI.SubtleMessageUpdateMessageForPlayer(playerId, Player_Data[playerId].build_mode_subtle_message_data[2].message, "<color=#F00>".. tostring(Player_Data[playerId].total_thrust).. "/".. Max_Thruster_Power.. " power")
         Player_Data[playerId].thrust_error_ui_visible = true
         -- UI_General_Toggle_Click
-        tm.audio.PlayAudioAtGameobject("UI_General_Toggle_Click", tm.players.GetPlayerGameObject(playerId))
+        tm.audio.PlayAudioAtGameobject(error_sound, tm.players.GetPlayerGameObject(playerId))
         return
     end
 
@@ -113,6 +114,7 @@ KartMakers.UpdateUI.Execute = function(playerId)
                             tm.playerUI.SetUIValue(playerId, "selected_block.engine_power", "<color=#666>N/A</color>") 
                         end
                     else
+                        Player_Data[playerId].selected_block_ui_visible = true
                         tm.playerUI.AddUILabel(playerId, "newline", "")
                         tm.playerUI.AddUILabel(playerId, "selected_block.name", string.sub(tm.players.GetPlayerSelectBlockInBuild(playerId).GetName(), 5, -10))
                         tm.playerUI.AddUILabel(playerId, "selected_block.mass", "Weight: ".. string.format("%0.1f", tm.players.GetPlayerSelectBlockInBuild(playerId).GetMass()*5) .. "kg")
@@ -124,10 +126,10 @@ KartMakers.UpdateUI.Execute = function(playerId)
                         else
                             tm.playerUI.AddUILabel(playerId, "selected_block.engine_power", "<color=#666>N/A</color>") 
                         end
-                        Player_Data[playerId].selected_block_ui_visible = true
                     end
                 else
                     if Player_Data[playerId].selected_block_ui_visible==true then
+                        Player_Data[playerId].selected_block_ui_visible = false
                         tm.playerUI.RemoveUI(playerId, "newline")
                         tm.playerUI.RemoveUI(playerId, "selected_block.name")
                         tm.playerUI.RemoveUI(playerId, "selected_block.mass")
@@ -135,14 +137,13 @@ KartMakers.UpdateUI.Execute = function(playerId)
                         tm.playerUI.RemoveUI(playerId, "selected_block.secondary_color")
                         tm.playerUI.RemoveUI(playerId, "selected_block.engine_power")
                     end
-                    Player_Data[playerId].selected_block_ui_visible = false
                 end
             end
         end
     else
+        Player_Data[playerId].ui_visible = true
         tm.playerUI.AddUILabel(playerId, "total_buoyancy", string.format("%.1f", Player_Data[playerId].total_buoyancy).. "kg total vehicle buoyancy")
         tm.playerUI.AddUILabel(playerId, "total_weight", string.format("%.1f", Player_Data[playerId].total_weight).. "kg total vehicle weight") -- Inaccurate vehicle weight isn't a bug; steering hinge has a misleading in-game weight value   
-        Player_Data[playerId].ui_visible = true
     end
 
     if Profiling==1 then
@@ -171,37 +172,37 @@ KartMakers.UpdateUI.ClearBuildModeSubtleMessages = function(playerId)
 end
 
 KartMakers.UpdateUI.ClearUIWindow = function(playerId)
-    if Player_Data[playerId].banned_blocks_ui_visible == true then
-        for i = 0,Player_Data[playerId].banned_blocks_ui_size do
-            tm.playerUI.RemoveUI(playerId, "error.banned_blocks-".. i)
-        end
-        tm.playerUI.RemoveUI(playerId, "error.banned_blocks")
-        Player_Data[playerId].banned_blocks_ui_visible = false
-    end
-    if Player_Data[playerId].too_many_engines_ui_visible == true then
-        tm.playerUI.RemoveUI(playerId, "error.too_many_engines")
-        Player_Data[playerId].too_many_engines_ui_visible = false
-    end
-    if Player_Data[playerId].wheels_error_ui_visible == true then
-        tm.playerUI.RemoveUI(playerId, "error.wheels_error")
-        Player_Data[playerId].wheels_error_ui_visible = false
-    end
-    if Player_Data[playerId].thrust_error_ui_visible == true then
-        tm.playerUI.RemoveUI(playerId, "error.thrust_error")
-        Player_Data[playerId].thrust_error_ui_visible = false
-    end
-    if Player_Data[playerId].selected_block_ui_visible == true then
-        tm.playerUI.RemoveUI(playerId, "selected_block.engine_power")
-        tm.playerUI.RemoveUI(playerId, "selected_block.buoyancy")
-        tm.playerUI.RemoveUI(playerId, "selected_block.mass")
-        tm.playerUI.RemoveUI(playerId, "selected_block.secondary_color")
-        tm.playerUI.RemoveUI(playerId, "selected_block.name")
-        tm.playerUI.RemoveUI(playerId, "newline")
-        Player_Data[playerId].selected_block_ui_visible = false
-    end
     if Player_Data[playerId].ui_visible == true then
         tm.playerUI.RemoveUI(playerId, "total_weight")
         tm.playerUI.RemoveUI(playerId, "total_buoyancy")
+        if Player_Data[playerId].banned_blocks_ui_visible == true then
+            for i = 0,Player_Data[playerId].banned_blocks_ui_size do
+                tm.playerUI.RemoveUI(playerId, "error.banned_blocks-".. i)
+            end
+            tm.playerUI.RemoveUI(playerId, "error.banned_blocks")
+            Player_Data[playerId].banned_blocks_ui_visible = false
+        end
+        if Player_Data[playerId].too_many_engines_ui_visible == true then
+            tm.playerUI.RemoveUI(playerId, "error.too_many_engines")
+            Player_Data[playerId].too_many_engines_ui_visible = false
+        end
+        if Player_Data[playerId].wheels_error_ui_visible == true then
+            tm.playerUI.RemoveUI(playerId, "error.wheels_error")
+            Player_Data[playerId].wheels_error_ui_visible = false
+        end
+        if Player_Data[playerId].thrust_error_ui_visible == true then
+            tm.playerUI.RemoveUI(playerId, "error.thrust_error")
+            Player_Data[playerId].thrust_error_ui_visible = false
+        end
+        if Player_Data[playerId].selected_block_ui_visible == true then
+            tm.playerUI.RemoveUI(playerId, "selected_block.engine_power")
+            tm.playerUI.RemoveUI(playerId, "selected_block.buoyancy")
+            tm.playerUI.RemoveUI(playerId, "selected_block.mass")
+            tm.playerUI.RemoveUI(playerId, "selected_block.secondary_color")
+            tm.playerUI.RemoveUI(playerId, "selected_block.name")
+            tm.playerUI.RemoveUI(playerId, "newline")
+            Player_Data[playerId].selected_block_ui_visible = false
+        end
         Player_Data[playerId].ui_visible = false
     end
 end

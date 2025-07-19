@@ -56,24 +56,35 @@ end
 tm.players.OnPlayerJoined.add(OnPlayerJoined)
 
 Block_Types = {
-    -- Wheels and their dimensions. Affects buoyancy.
-    WheelStandard = "3x3x2",
-    WheelSlick = "3x3x2",
-    MonsterTruckWheelBlock = "7x7x4",
-    GocartWheel = "2x2x1",
-    SlimWheel = "3x3x1",
-    DragRacingWheel = "5x5x4",
-    TruckWheel = "5x5x2",
-    SpikedWheel = "3x3x2",
-    CarWheel_3x3x1 = "3x3x1",
-    MotorCycleWheel = "3x3x1",
-    TopMountedLandingWheel = "3x2x2",
-    WaterSki = "4x1x1",
-    Piston = "4x1x1",
+    -- Wheels
+    WheelStandard = "wheel",
+    WheelSlick = "wheel",
+    MonsterTruckWheelBlock = "wheel",
+    GocartWheel = "wheel",
+    SlimWheel = "wheel",
+    DragRacingWheel = "wheel",
+    TruckWheel = "wheel",
+    SpikedWheel = "wheel",
+    CarWheel_3x3x1 = "wheel",
+    MotorCycleWheel = "wheel",
+    TopMountedLandingWheel = "wheel",
 
-    -- Hinge having less drag is debatable because it honestly doesnt matter that much
-    SmallHinge = "decoration",
+    -- 10% drag
+    WaterSki = "drag_100",
+    Piston = "drag_10",
+    SmallHinge = "drag_10", -- Hinge having less drag is debatable because it honestly doesnt matter that much
+    LightFront = "drag_10",
+    LightFrontLarge = "drag_10",
+    LightFront_V2 = "drag_10",
+    LightBack = "drag_10",
+    LightBack_V2 = "drag_10",
+    PopupHeadlightBlock = "drag_10",
+    BajaLEDs = "drag_10",
+    CityHeadlights = "drag_10",
+    MilitaryHeadlights = "drag_10",
+    CameraBlock = "drag_10",
 
+    -- Pipes: 1 nub = +10% drag, +0.1kg
     ModularTubeSystem_TubeDoubleElbow = "tubes_3", -- 3 nubs
     ModularTubeSystem_Skewed1x1x2 = "tubes_2", -- 2 nubs
     ModularTubeSystem_Tube1x1x8 = "tubes_2", -- 2 nubs
@@ -86,17 +97,7 @@ Block_Types = {
     ModularTubeSystem_TubeTee = "tubes_3", -- 3 nubs
     ModularTubeSystem_Tube1x1 = "tubes_2", -- 2 nubs
     ModularTubeSystem_TubeElbow = "tubes_2", -- 2 nubs
-    ModularTubeSystem_TubeCross = "tubes_2", -- 4 nubs
-    LightFront = "decoration",
-    LightFrontLarge = "decoration",
-    LightFront_V2 = "decoration",
-    LightBack = "decoration",
-    LightBack_V2 = "decoration",
-    PopupHeadlightBlock = "decoration",
-    BajaLEDs = "decoration",
-    CityHeadlights = "decoration",
-    MilitaryHeadlights = "decoration",
-    CameraBlock = "decoration",
+    ModularTubeSystem_TubeCross = "tubes_4", -- 4 nubs
 
     -- no drag for the seats
     GokartSeat = "seat",
@@ -124,6 +125,9 @@ Block_Types = {
 
     -- anti-drag nerfs
     BracketBlock = "l_bracket",
+
+    GridBlockSmall = "grid_1x2", -- 1x2 grid
+    Gridblock = "grid_1x4", -- 1x4 grid
 
     -- Banned blocks
     -- Banned blocks: Traction
