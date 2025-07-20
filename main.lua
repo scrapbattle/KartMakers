@@ -21,7 +21,7 @@ Magnet_Fling_Duration = 1.5 -- How long the magnet fling lasts for (seconds) | D
 Magnet_Fling_Strength = 2 -- Strength for magnet fling | Default: 2
 Global_Engine_Power_Multiplier = 1 -- Multiplier for engine CC/Power
 Max_Thruster_Power = 300 -- Max thrust per kart
-Minimum_Wheels = 2
+Minimum_Wheels = 4
 
 Player_Data = {}
 function OnPlayerJoined(player)
@@ -113,10 +113,8 @@ Block_Types = {
     EngineNinja = "engine",
 
     -- gyro changes
-    GyroStabilizer = "gyro_stabilizer",
     AngleSensorBlock = "angle_sensor",
     InertialRedirector = "quantum_rudder",
-    HingeLarge = "large_hinge",
 
     -- thruster tiers
     JetEngineMini =  "t1_thruster", -- Thruster
@@ -130,14 +128,17 @@ Block_Types = {
     Gridblock = "grid_1x4", -- 1x4 grid
 
     -- Banned blocks
+    GyroActuator = "banned",
+    GyroStabilizer = "banned",
     -- Banned blocks: Traction
     AnchorBlock = "banned",
     HoveringBlock = "banned",
     -- Banned blocks: Mechanical
     DetachableBlock = "banned",
     PowerConduitConnector = "banned",
+    HingeLarge = "banned",
     -- Banned blocks: Air propellers
-    PropellerBlock = "banned",
+        --PropellerBlock = "banned",
     LargePropeller = "banned",
     HelicopterTailPropeller = "banned",
     HugePropellerEngine = "banned",

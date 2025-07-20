@@ -26,7 +26,7 @@ KartMakers.UpdateUI.Execute = function(playerId)
     if Player_Data[playerId].banned_blocks_ui_visible==true then -- Remove banned blocks ui if it actually exists
         Player_Data[playerId].banned_blocks_ui_visible = false
         tm.playerUI.RemoveUI(playerId, "error.banned_blocks")
-        for i = 0,Player_Data[playerId].banned_blocks_ui_size do
+        for i = 1,Player_Data[playerId].banned_blocks_ui_size do
             tm.playerUI.RemoveUI(playerId, "error.banned_blocks-".. i)
         end
     end
@@ -47,7 +47,7 @@ KartMakers.UpdateUI.Execute = function(playerId)
         tm.playerUI.RemoveUI(playerId, "error.too_many_engines")
         Player_Data[playerId].too_many_engines_ui_visible = false
     end
-    if Player_Data[playerId].total_engines>1 then -- If the player has more than one engine, display the "too many engines" error
+    if #Player_Data[playerId].engines>1 then -- If the player has more than one engine, display the "too many engines" error
         tm.playerUI.AddUILabel(playerId, "error.too_many_engines", "<b><color=#E22>You can only have one engine!</color></b>")
         tm.playerUI.SubtleMessageUpdateMessageForPlayer(playerId, Player_Data[playerId].build_mode_subtle_message_data[1].message, "You can only have one engine!")
         Player_Data[playerId].too_many_engines_ui_visible = true
@@ -176,7 +176,7 @@ KartMakers.UpdateUI.ClearUIWindow = function(playerId)
         tm.playerUI.RemoveUI(playerId, "total_weight")
         tm.playerUI.RemoveUI(playerId, "total_buoyancy")
         if Player_Data[playerId].banned_blocks_ui_visible == true then
-            for i = 0,Player_Data[playerId].banned_blocks_ui_size do
+            for i = 1,Player_Data[playerId].banned_blocks_ui_size do
                 tm.playerUI.RemoveUI(playerId, "error.banned_blocks-".. i)
             end
             tm.playerUI.RemoveUI(playerId, "error.banned_blocks")

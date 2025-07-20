@@ -17,7 +17,7 @@ KartMakers.CheckStructures.Execute = function(playerId)
                     local block = Player_Data[playerId].engines[i].block
                     local power = 0
                     --tm.os.Log("  Engine exists, calculating power...")
-                    if Player_Data[playerId].wheels>=Minimum_Wheels and Player_Data[playerId].wheels<=6 then
+                    if Player_Data[playerId].wheels>=Minimum_Wheels and Player_Data[playerId].wheels<=6 and #Player_Data[playerId].engines<=1 then
                         --tm.os.Log("    Wheel check passed")
                         for j,_ in ipairs(Engine_Power_List) do
                             --tm.os.Log("      Checking engine type #".. j)
@@ -74,12 +74,12 @@ KartMakers.CheckStructures.Execute = function(playerId)
                     if value == "wheel" then
                         Player_Data[playerId].wheels = Player_Data[playerId].wheels + 1
                     end
-                    if value~=nil and string.find(value, "drag_")~=nil then -- ski, piston, small hinge, lights, camera
-                        local num = math.min(string.sub(value, (string.find(value, "_")+1), -1)/100, 1.0)
+                    if value~=nil and value:find("drag_")~=nil then -- ski, piston, small hinge, lights, camera
+                        local num = math.min(string.sub(value, (value:find("_")+1), -1)/100, 1.0)
                         block.SetDragAll(num, num, num, num, num, num)
                     end
-                    if value~=nil and string.find(value, "tubes_")~=nil then -- 20% drag per nub, 0.1kg per nub
-                        local n = math.min(string.sub(value, (string.find(value, "_")+1), -1)*0.2, 1.0)
+                    if value~=nil and value:find("tubes_")~=nil then -- 20% drag per nub, 0.1kg per nub
+                        local n = math.min(string.sub(value, (value:find("_")+1), -1)*0.2, 1.0)
                         block.SetDragAll(n, n, n, n, n, n)
                         block.SetMass(n/10)
                     end
@@ -91,7 +91,6 @@ KartMakers.CheckStructures.Execute = function(playerId)
                     end
 
                     if value == "engine" then
-                        Player_Data[playerId].total_engines = Player_Data[playerId].total_engines + 1
                         Player_Data[playerId].engines[#Player_Data[playerId].engines+1] = {block=block,power=block.GetEnginePower()}
                     end
 
@@ -143,7 +142,7 @@ KartMakers.CheckStructures.Execute = function(playerId)
                 for i,_ in ipairs(Player_Data[playerId].engines) do
                     local block = Player_Data[playerId].engines[i].block
                     block.SetEnginePower(0) -- Set to zero so if there's an invalid kart setup it remains as zero
-                    if #Player_Data[playerId].banned_blocks==0 then
+                    if #Player_Data[playerId].banned_blocks==0 and #Player_Data[playerId].engines<=1 then
                         for j,_ in ipairs(Engine_Power_List) do
                             if string.sub(block.GetName(), 5, -10) == Engine_Power_List[j].name then
                                 block.SetEnginePower(Engine_Power_List[j].cc*22.22)
